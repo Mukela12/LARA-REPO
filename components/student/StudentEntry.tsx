@@ -266,7 +266,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
     // Generate shareable link with both taskCode and studentId when available
     let shareableLink = '';
     if (taskCode && studentId) {
-      shareableLink = `${baseUrl}?taskCode=${taskCode}&studentId=${studentId}`;
+      shareableLink = `${baseUrl}?studentId=${studentId}`;
     } else if (studentId) {
       shareableLink = `${baseUrl}?studentId=${studentId}`;
     }

@@ -1,13 +1,15 @@
 import React from 'react';
-import { BookOpen, BarChart2, Settings, Users, PenTool, GraduationCap, List } from 'lucide-react';
+import { BookOpen, BarChart2, Settings, Users, PenTool, GraduationCap, List, LogOut, User } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onNavigate: (tab: string) => void;
   onOpenSettings: () => void;
+  teacherName?: string;
+  onLogout?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenSettings }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenSettings, teacherName, onLogout }) => {
   const navItems = [
     { id: 'dashboard', label: 'Sessions', icon: BookOpen },
     { id: 'tasks', label: 'All Tasks', icon: List },
@@ -47,14 +49,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100">
+      <div className="p-4 border-t border-slate-100 space-y-2">
+        {teacherName && (
+          <div className="px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
+                <User className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-900 truncate">{teacherName}</p>
+                <p className="text-xs text-slate-500">Teacher</p>
+              </div>
+            </div>
+          </div>
+        )}
         <button
           onClick={onOpenSettings}
-          className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 w-full transition-colors"
+          className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 w-full transition-colors rounded-lg hover:bg-slate-50"
         >
             <Settings className="w-5 h-5 text-slate-400" />
             Settings
         </button>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 w-full transition-colors rounded-lg hover:bg-red-50"
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </button>
+        )}
       </div>
     </aside>
   );

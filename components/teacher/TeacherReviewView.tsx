@@ -127,13 +127,13 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
             </Card>
           </div>
 
-          {/* Right: AI-Generated Feedback */}
+          {/* Right: LARA-Generated Feedback */}
           <div>
             <Card>
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">
-                    AI-Generated Feedback
+                    LARA-Generated Feedback
                   </h2>
                   <Badge variant="green">Ready to Review</Badge>
                 </div>

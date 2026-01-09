@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Student, Task, FeedbackSession, Submission } from '../types';
+import { Student, Task, FeedbackSession, Submission, NextStep, Folder } from '../types';
 import { generateUniqueTaskCode, saveTaskCodeMapping, getAllTaskCodes } from './taskCodes';
 
 // Initial Mock Data
@@ -14,7 +14,11 @@ const INITIAL_TASKS: Task[] = [
       'Use strong adjectives',
       'Create a clear mood or atmosphere'
     ],
-    universalExpectations: true
+    universalExpectations: true,
+    status: 'active',
+    folderId: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
   }
 ];
 
@@ -23,6 +27,8 @@ export interface AppState {
   students: Student[];
   submissions: Record<string, Submission>;
   currentTaskId: string;
+  selectedNextStep: NextStep | null;
+  folders: Folder[];
 }
 
 // Get storage key for a teacher (or demo mode)
@@ -49,7 +55,9 @@ export function useAppStore(teacherId?: string) {
       tasks: INITIAL_TASKS,
       students: [],
       submissions: {},
-      currentTaskId: 'default-task'
+      currentTaskId: 'default-task',
+      selectedNextStep: null,
+      folders: []
     };
   });
 
@@ -58,20 +66,30 @@ export function useAppStore(teacherId?: string) {
   }, [state, storageKey]);
 
   const addTask = (task: Task) => {
+    // Ensure new required fields are set
+    const now = new Date();
+    const taskWithDefaults: Task = {
+      ...task,
+      status: task.status || 'active',
+      createdAt: task.createdAt || now,
+      updatedAt: task.updatedAt || now,
+      folderId: task.folderId || null
+    };
+
     // Generate unique task code if not provided
-    if (!task.taskCode) {
+    if (!taskWithDefaults.taskCode) {
       const existingCodes = getAllTaskCodes(teacherId);
       const taskCode = generateUniqueTaskCode(Object.keys(existingCodes));
-      task.taskCode = taskCode;
+      taskWithDefaults.taskCode = taskCode;
 
       // Save the mapping
-      saveTaskCodeMapping(teacherId, taskCode, task.id);
+      saveTaskCodeMapping(teacherId, taskCode, taskWithDefaults.id);
     }
 
     setState(prev => ({
       ...prev,
-      tasks: [task, ...prev.tasks],
-      currentTaskId: task.id
+      tasks: [taskWithDefaults, ...prev.tasks],
+      currentTaskId: taskWithDefaults.id
     }));
   };
 
@@ -89,7 +107,7 @@ export function useAppStore(teacherId?: string) {
     return newStudent;
   };
 
-  const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession) => {
+  const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession, timeElapsed?: number) => {
     setState(prev => ({
       ...prev,
       students: prev.students.map(s => s.id === studentId ? { ...s, status: 'submitted' } : s),
@@ -100,7 +118,9 @@ export function useAppStore(teacherId?: string) {
           taskId,
           content,
           feedback,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          timeElapsed,
+          revisionCount: 0
         }
       }
     }));
@@ -143,6 +163,64 @@ export function useAppStore(teacherId?: string) {
     window.location.reload();
   };
 
+  const setSelectedNextStep = (step: NextStep | null) => {
+    setState(prev => ({
+      ...prev,
+      selectedNextStep: step
+    }));
+  };
+
+  const deactivateTask = (taskId: string) => {
+    setState(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(task =>
+        task.id === taskId
+          ? { ...task, status: 'inactive' as const, updatedAt: new Date() }
+          : task
+      )
+    }));
+  };
+
+  const reactivateTask = (taskId: string) => {
+    setState(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(task =>
+        task.id === taskId
+          ? { ...task, status: 'active' as const, updatedAt: new Date() }
+          : task
+      )
+    }));
+  };
+
+  const createFolder = (name: string, description?: string, color?: string): string => {
+    const folder: Folder = {
+      id: uuidv4(),
+      name,
+      description,
+      color: color || '#3b82f6',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    setState(prev => ({
+      ...prev,
+      folders: [...prev.folders, folder]
+    }));
+
+    return folder.id;
+  };
+
+  const moveTaskToFolder = (taskId: string, folderId: string | null) => {
+    setState(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(task =>
+        task.id === taskId
+          ? { ...task, folderId, updatedAt: new Date() }
+          : task
+      )
+    }));
+  };
+
   return {
     state,
     addTask,
@@ -152,6 +230,11 @@ export function useAppStore(teacherId?: string) {
     updateFeedback,
     getStudentStatus,
     selectTask,
-    resetDemo
+    resetDemo,
+    setSelectedNextStep,
+    deactivateTask,
+    reactivateTask,
+    createFolder,
+    moveTaskToFolder
   };
 }

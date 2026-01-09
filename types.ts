@@ -16,6 +16,19 @@ export interface Task {
   successCriteria: string[];
   universalExpectations: boolean;
   taskCode?: string; // 6-digit alphanumeric code for student access
+  status: 'active' | 'inactive';
+  folderId?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface FeedbackItem {
@@ -47,6 +60,8 @@ export interface Submission {
   content: string;
   feedback: FeedbackSession | null;
   timestamp: number;
+  timeElapsed?: number;      // Timer engagement metric (seconds)
+  revisionCount: number;      // Number of revisions made
 }
 
 export interface ClassInsight {

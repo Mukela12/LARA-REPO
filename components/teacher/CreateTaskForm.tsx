@@ -86,7 +86,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
         <Card className="p-6 space-y-4">
           <div className="flex items-center justify-between">
             <label className="block text-sm font-medium text-slate-700">Success Criteria</label>
-            <span className="text-xs text-slate-500">The AI will use these to generate feedback</span>
+            <span className="text-xs text-slate-500">LARA will use these to generate feedback</span>
           </div>
           
           <div className="space-y-3">
@@ -112,15 +112,17 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
             ))}
           </div>
 
-          <Button 
-            type="button" 
-            variant="outline" 
-            size="sm" 
-            onClick={handleAddCriteria}
-            leftIcon={<Plus className="w-4 h-4" />}
-          >
-            Add Criteria
-          </Button>
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddCriteria}
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Add Criteria
+            </Button>
+          </div>
         </Card>
 
         <div className="flex justify-end pt-4">

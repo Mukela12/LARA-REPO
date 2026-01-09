@@ -10,13 +10,17 @@ interface DashboardLayoutProps {
   activeTab: string;
   onNavigate: (tab: string) => void;
   onExit: () => void;
+  teacherName?: string;
+  onLogout?: () => void;
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   activeTab,
   onNavigate,
-  onExit
+  onExit,
+  teacherName,
+  onLogout
 }) => {
   const [showSettings, setShowSettings] = useState(false);
 
@@ -27,6 +31,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         activeTab={activeTab}
         onNavigate={onNavigate}
         onOpenSettings={() => setShowSettings(true)}
+        teacherName={teacherName}
+        onLogout={onLogout}
       />
 
       {/* Main Content Area */}

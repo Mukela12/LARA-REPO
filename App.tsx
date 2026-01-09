@@ -6,7 +6,7 @@ import { TeacherReviewView } from './components/teacher/TeacherReviewView';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Button } from './components/ui/Button';
-import { FeedbackSession } from './types';
+import { FeedbackSession, NextStep } from './types';
 import { GraduationCap, School, ChevronLeft, Trash2, LogIn } from 'lucide-react';
 import { useAppStore } from './lib/store';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
@@ -29,7 +29,7 @@ function App() {
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
 
   // Store actions (now teacher-scoped)
-  const { state, addTask, addStudent, submitWork, approveFeedback, updateFeedback, getStudentStatus, selectTask, resetDemo } = useAppStore(currentTeacher?.id);
+  const { state, addTask, addStudent, submitWork, approveFeedback, updateFeedback, getStudentStatus, selectTask, resetDemo, setSelectedNextStep } = useAppStore(currentTeacher?.id);
 
   // Student Local State
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
@@ -93,13 +93,14 @@ function App() {
     window.history.pushState({}, '', url);
   };
 
-  const handleStudentSubmit = (content: string, feedback: FeedbackSession) => {
+  const handleStudentSubmit = (content: string, feedback: FeedbackSession, timeElapsed?: number) => {
     if (currentStudentId && state.tasks[0]) {
-      submitWork(currentStudentId, state.tasks[0].id, content, feedback);
+      submitWork(currentStudentId, state.tasks[0].id, content, feedback, timeElapsed);
     }
   };
 
-  const handleStudentContinue = (step: any) => {
+  const handleStudentContinue = (step: NextStep) => {
+    setSelectedNextStep(step);
     setCurrentView('student_revision');
   };
 
@@ -228,6 +229,8 @@ function App() {
             activeTab={activeTab}
             onNavigate={setActiveTab}
             onExit={() => setCurrentView('landing')}
+            teacherName={currentTeacher?.name}
+            onLogout={handleTeacherLogout}
         >
             <TeacherDashboard
                 activeTab={activeTab}
@@ -291,6 +294,30 @@ function App() {
       currentTask = state.tasks[0];
     }
 
+    // Validate task status - show error if inactive
+    if (currentTask && currentTask.status === 'inactive') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+          <Card className="max-w-md w-full p-8 text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+              <School className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">Task Inactive</h2>
+            <p className="text-slate-600">
+              This task is currently inactive. Please contact your teacher for access.
+            </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setCurrentView('landing')}
+            >
+              Back to Start
+            </Button>
+          </Card>
+        </div>
+      );
+    }
+
     // If feedback approved, show feedback view
     if (isFeedbackReady && currentStudentId && state.submissions[currentStudentId]?.feedback) {
       return (
@@ -317,6 +344,8 @@ function App() {
   }
 
   if (currentView === 'student_revision') {
+      const selectedStep = state.selectedNextStep;
+
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
               <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -324,8 +353,21 @@ function App() {
                     <School className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">Ready to Revise</h2>
+
+                {selectedStep && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-left">
+                    <h3 className="font-semibold text-emerald-900 mb-2">Your Selected Next Step:</h3>
+                    <p className="text-sm text-emerald-800 mb-1">
+                      <span className="font-medium">{selectedStep.actionVerb}</span> {selectedStep.target}
+                    </p>
+                    <p className="text-xs text-emerald-700">
+                      Success looks like: {selectedStep.successIndicator}
+                    </p>
+                  </div>
+                )}
+
                 <p className="text-slate-600 mb-8 leading-relaxed">
-                    Great choice! You have selected a next step. 
+                    Great choice! You have selected a next step.
                     <br/><span className="text-sm text-slate-400 mt-2 block">In the full app, the editor would open here with your selected focus area highlighted.</span>
                 </p>
                 <Button variant="outline" className="w-full" onClick={() => {

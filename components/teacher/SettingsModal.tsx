@@ -50,7 +50,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Enter your Anthropic API key to enable AI feedback generation
+                    Enter your Anthropic API key to enable LARA feedback generation
                   </p>
                 </div>
 

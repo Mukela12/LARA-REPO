@@ -126,9 +126,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">All Tasks</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Manage and switch between your tasks
-              </p>
             </div>
             <Button
               variant="primary"

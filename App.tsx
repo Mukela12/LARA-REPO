@@ -104,8 +104,11 @@ function App() {
       setCurrentView('student_flow');
     } else if (studentId) {
       // Returning student - restore their session from backend
+      console.log('[RESTORE] Starting session restore for studentId:', studentId);
       authApi.restoreSession(studentId)
         .then((response) => {
+          console.log('[RESTORE] API Response:', JSON.stringify(response, null, 2));
+
           // Set up the session state
           setStudentToken(response.token);
           setCurrentStudentId(response.studentId);
@@ -119,10 +122,13 @@ function App() {
           });
 
           // First, add the student to the local store
+          console.log('[RESTORE] Calling restoreStudent with:', response.studentId, response.studentName, response.status);
           restoreStudent(response.studentId, response.studentName, response.status as Student['status']);
 
           // If feedback is ready, update local state with submission and feedback
+          console.log('[RESTORE] feedbackReady:', response.feedbackReady, 'feedback exists:', !!response.feedback);
           if (response.feedbackReady && response.feedback) {
+            console.log('[RESTORE] Calling submitWork with feedback');
             submitWork(
               response.studentId,
               response.task.id,
@@ -131,8 +137,10 @@ function App() {
               undefined
             );
             if (response.status === 'completed') {
+              console.log('[RESTORE] Marking as completed');
               markAsCompleted(response.studentId);
             } else if (response.status === 'feedback_ready' || response.status === 'revising') {
+              console.log('[RESTORE] Calling approveFeedback, masteryConfirmed:', response.masteryConfirmed);
               approveFeedback(response.studentId, response.masteryConfirmed);
             }
           }
@@ -142,10 +150,11 @@ function App() {
           url.searchParams.set('sessionId', response.sessionId);
           window.history.replaceState({}, '', url);
 
+          console.log('[RESTORE] Setting view to student_flow');
           setCurrentView('student_flow');
         })
         .catch((error) => {
-          console.error('Failed to restore session:', error);
+          console.error('[RESTORE] Failed to restore session:', error);
           // Fall back to showing student entry
           setCurrentStudentId(studentId);
           setCurrentView('student_flow');
@@ -415,6 +424,15 @@ function App() {
     const isFeedbackReady = status === 'feedback_ready' || status === 'revising';
     const isCompleted = status === 'completed';
     const submission = currentStudentId ? state.submissions[currentStudentId] : null;
+
+    // DEBUG LOGGING
+    console.log('[RENDER student_flow] currentStudentId:', currentStudentId);
+    console.log('[RENDER student_flow] status:', status);
+    console.log('[RENDER student_flow] isFeedbackReady:', isFeedbackReady);
+    console.log('[RENDER student_flow] isCompleted:', isCompleted);
+    console.log('[RENDER student_flow] submission:', submission);
+    console.log('[RENDER student_flow] submission?.feedback:', submission?.feedback);
+    console.log('[RENDER student_flow] state.students:', state.students);
 
     // Get taskCode from URL if present
     const params = new URLSearchParams(window.location.search);

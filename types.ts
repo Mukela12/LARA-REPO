@@ -1,6 +1,20 @@
 export type FeedbackType = 'task' | 'process' | 'self_reg';
 
-export type StudentStatus = 'active' | 'submitted' | 'feedback_ready' | 'revising' | 'completed';
+export type StudentStatus =
+  | 'active'              // Student joined, hasn't submitted
+  | 'ready_for_feedback'  // Student submitted, waiting for teacher to generate
+  | 'generating'          // Teacher clicked generate, AI processing
+  | 'submitted'           // AI generated, waiting for teacher review
+  | 'feedback_ready'      // Teacher approved, student can view
+  | 'revising'            // Student working on revision
+  | 'completed';          // Session complete
+
+// Credit tracking for teacher usage
+export interface TeacherCredits {
+  used: number;
+  remaining: number;
+  monthlyLimit: number;
+}
 
 export interface Student {
   id: string;
@@ -52,6 +66,7 @@ export interface FeedbackSession {
   strengths: FeedbackItem[];
   growthAreas: FeedbackItem[];
   nextSteps: NextStep[];
+  masteryAchieved?: boolean;  // AI suggests mastery (all criteria met, no significant growth areas)
 }
 
 export interface Submission {
@@ -60,8 +75,13 @@ export interface Submission {
   content: string;
   feedback: FeedbackSession | null;
   timestamp: number;
-  timeElapsed?: number;      // Timer engagement metric (seconds)
-  revisionCount: number;      // Number of revisions made
+  timeElapsed?: number;           // Timer engagement metric (seconds)
+  revisionCount: number;          // Number of revisions made
+  previousContent?: string;       // For revision comparison
+  selectedNextStepId?: string;    // Track selected next step ID
+  selectedNextStep?: NextStep;    // Full next step object for context
+  isRevision?: boolean;           // Flag for teacher to know it's a resubmit
+  masteryConfirmed?: boolean;     // Teacher confirmed mastery
 }
 
 export interface ClassInsight {

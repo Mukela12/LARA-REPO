@@ -33,9 +33,15 @@ Task Prompt: "${taskPrompt}"
 Success Criteria:
 ${criteria.map(c => `- ${c}`).join('\n')}
 
+MASTERY DETECTION:
+- Set "masteryAchieved" to true ONLY if the student has met ALL the success criteria
+- If there are any significant growth areas or missing criteria, set it to false
+- Be honest but encouraging - mastery means the work meets the teacher's requirements
+
 You must respond with ONLY valid JSON matching this exact structure:
 {
   "goal": "string - A summary of the learning goal",
+  "masteryAchieved": boolean - true if ALL success criteria are met with no significant gaps,
   "strengths": [
     {
       "id": "string",
@@ -62,14 +68,16 @@ You must respond with ONLY valid JSON matching this exact structure:
       "actionType": "revise" | "improve_section" | "reupload" | "rehearse"
     }
   ]
-}`;
+}
+
+NOTE: If masteryAchieved is true, nextSteps should be optional "challenge yourself" improvements, not required fixes.`;
 
   try {
     // Get client at runtime (reads env vars at runtime, not build time)
     const anthropic = getAnthropicClient();
 
     const message = await anthropic.messages.create({
-      model: import.meta.env.VITE_CLAUDE_MODEL || "claude-3-5-sonnet-20241022",
+      model: import.meta.env.VITE_CLAUDE_MODEL || "claude-haiku-4-5-20251001",
       max_tokens: 4096,
       system: systemPrompt,
       messages: [
@@ -108,6 +116,11 @@ You must respond with ONLY valid JSON matching this exact structure:
     data.strengths.forEach((s: any, i: number) => s.id = `str-${i}`);
     data.growthAreas.forEach((g: any, i: number) => g.id = `grow-${i}`);
     data.nextSteps.forEach((n: any, i: number) => n.id = `next-${i}`);
+
+    // Fallback: if AI didn't return masteryAchieved, infer from growthAreas
+    if (typeof data.masteryAchieved !== 'boolean') {
+      data.masteryAchieved = data.growthAreas.length === 0;
+    }
 
     return data as FeedbackSession;
 

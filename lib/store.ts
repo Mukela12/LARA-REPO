@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Student, Task, FeedbackSession, Submission, NextStep, Folder } from '../types';
+import { Student, Task, FeedbackSession, Submission, NextStep, Folder, TeacherCredits } from '../types';
 import { generateUniqueTaskCode, saveTaskCodeMapping, getAllTaskCodes } from './taskCodes';
+import { generateFeedback } from './gemini';
 
 // Initial Mock Data
 const INITIAL_TASKS: Task[] = [
@@ -29,6 +30,7 @@ export interface AppState {
   currentTaskId: string;
   selectedNextStep: NextStep | null;
   folders: Folder[];
+  credits: TeacherCredits;
 }
 
 // Get storage key for a teacher (or demo mode)
@@ -43,22 +45,38 @@ export function useAppStore(teacherId?: string) {
   const storageKey = getStorageKey(teacherId);
 
   const [state, setState] = useState<AppState>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error("Failed to load store", e);
-    }
-    return {
+    const defaultState: AppState = {
       tasks: INITIAL_TASKS,
       students: [],
       submissions: {},
       currentTaskId: 'default-task',
       selectedNextStep: null,
-      folders: []
+      folders: [],
+      credits: {
+        used: 0,
+        remaining: 800,
+        monthlyLimit: 800
+      }
     };
+
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge with defaults to handle missing fields from old localStorage data
+        return {
+          ...defaultState,
+          ...parsed,
+          // Ensure folders is always an array (for old data without folders)
+          folders: parsed.folders || [],
+          // Ensure credits is always present (for old data without credits)
+          credits: parsed.credits || defaultState.credits
+        };
+      }
+    } catch (e) {
+      console.error("Failed to load store", e);
+    }
+    return defaultState;
   });
 
   useEffect(() => {
@@ -81,10 +99,10 @@ export function useAppStore(teacherId?: string) {
       const existingCodes = getAllTaskCodes(teacherId);
       const taskCode = generateUniqueTaskCode(Object.keys(existingCodes));
       taskWithDefaults.taskCode = taskCode;
-
-      // Save the mapping
-      saveTaskCodeMapping(teacherId, taskCode, taskWithDefaults.id);
     }
+
+    // Save full task data to global mapping for student access
+    saveTaskCodeMapping(teacherId, taskWithDefaults.taskCode, taskWithDefaults);
 
     setState(prev => ({
       ...prev,
@@ -107,10 +125,12 @@ export function useAppStore(teacherId?: string) {
     return newStudent;
   };
 
-  const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession, timeElapsed?: number) => {
+  // Submit work without feedback - teacher will generate later
+  const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
     setState(prev => ({
       ...prev,
-      students: prev.students.map(s => s.id === studentId ? { ...s, status: 'submitted' } : s),
+      // If no feedback, status is 'ready_for_feedback', otherwise 'submitted'
+      students: prev.students.map(s => s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s),
       submissions: {
         ...prev.submissions,
         [studentId]: {
@@ -126,10 +146,21 @@ export function useAppStore(teacherId?: string) {
     }));
   };
 
-  const approveFeedback = (studentId: string) => {
+  const approveFeedback = (studentId: string, isMastered?: boolean) => {
     setState(prev => ({
       ...prev,
-      students: prev.students.map(s => s.id === studentId ? { ...s, status: 'feedback_ready' } : s)
+      students: prev.students.map(s =>
+        s.id === studentId
+          ? { ...s, status: isMastered ? 'completed' as const : 'feedback_ready' as const }
+          : s
+      ),
+      submissions: {
+        ...prev.submissions,
+        [studentId]: {
+          ...prev.submissions[studentId],
+          masteryConfirmed: isMastered
+        }
+      }
     }));
   };
 
@@ -160,6 +191,8 @@ export function useAppStore(teacherId?: string) {
 
   const resetDemo = () => {
     localStorage.removeItem(storageKey);
+    localStorage.removeItem('lara-task-codes-global'); // Also clear global task codes
+    sessionStorage.removeItem('lara-demo-mode'); // Clear demo mode session
     window.location.reload();
   };
 
@@ -170,26 +203,104 @@ export function useAppStore(teacherId?: string) {
     }));
   };
 
-  const deactivateTask = (taskId: string) => {
+  // Store selected next step in student's submission
+  const saveSelectedNextStep = (studentId: string, step: NextStep) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(task =>
-        task.id === taskId
-          ? { ...task, status: 'inactive' as const, updatedAt: new Date() }
-          : task
+      submissions: {
+        ...prev.submissions,
+        [studentId]: {
+          ...prev.submissions[studentId],
+          selectedNextStepId: step.id,
+          selectedNextStep: step
+        }
+      },
+      // Also update student status to 'revising'
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: 'revising' as const } : s
       )
     }));
   };
 
+  // Submit a revision (max 3 revisions allowed)
+  // MVP1: Revisions are saved but no AI feedback is generated (deferred feature)
+  const submitRevision = (
+    studentId: string,
+    taskId: string,
+    newContent: string,
+    timeElapsed?: number
+  ) => {
+    setState(prev => {
+      const existingSubmission = prev.submissions[studentId];
+      const previousContent = existingSubmission?.content || '';
+      const currentRevisionCount = existingSubmission?.revisionCount || 0;
+
+      // Enforce max 3 revisions
+      if (currentRevisionCount >= 3) {
+        console.warn('Max revisions (3) reached for student:', studentId);
+        return prev; // Don't update state
+      }
+
+      return {
+        ...prev,
+        // Set to 'ready_for_feedback' - teacher will generate when ready
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'ready_for_feedback' as const } : s
+        ),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            studentId,
+            taskId,
+            content: newContent,
+            feedback: null, // No feedback until teacher generates
+            timestamp: Date.now(),
+            timeElapsed,
+            revisionCount: currentRevisionCount + 1,
+            previousContent,
+            selectedNextStepId: existingSubmission?.selectedNextStepId,
+            selectedNextStep: existingSubmission?.selectedNextStep,
+            isRevision: true
+          }
+        }
+      };
+    });
+  };
+
+  const deactivateTask = (taskId: string) => {
+    setState(prev => {
+      const updatedTasks = prev.tasks.map(task =>
+        task.id === taskId
+          ? { ...task, status: 'inactive' as const, updatedAt: new Date() }
+          : task
+      );
+
+      // Update global mapping with new status
+      const updatedTask = updatedTasks.find(t => t.id === taskId);
+      if (updatedTask?.taskCode) {
+        saveTaskCodeMapping(teacherId, updatedTask.taskCode, updatedTask);
+      }
+
+      return { ...prev, tasks: updatedTasks };
+    });
+  };
+
   const reactivateTask = (taskId: string) => {
-    setState(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(task =>
+    setState(prev => {
+      const updatedTasks = prev.tasks.map(task =>
         task.id === taskId
           ? { ...task, status: 'active' as const, updatedAt: new Date() }
           : task
-      )
-    }));
+      );
+
+      // Update global mapping with new status
+      const updatedTask = updatedTasks.find(t => t.id === taskId);
+      if (updatedTask?.taskCode) {
+        saveTaskCodeMapping(teacherId, updatedTask.taskCode, updatedTask);
+      }
+
+      return { ...prev, tasks: updatedTasks };
+    });
   };
 
   const createFolder = (name: string, description?: string, color?: string): string => {
@@ -221,6 +332,154 @@ export function useAppStore(teacherId?: string) {
     }));
   };
 
+  const deleteFolder = (folderId: string) => {
+    setState(prev => ({
+      ...prev,
+      // Remove folder
+      folders: prev.folders.filter(f => f.id !== folderId),
+      // Reset tasks in this folder to no folder
+      tasks: prev.tasks.map(task =>
+        task.folderId === folderId
+          ? { ...task, folderId: null, updatedAt: new Date() }
+          : task
+      )
+    }));
+  };
+
+  const updateFolder = (folderId: string, name: string, description?: string, color?: string) => {
+    setState(prev => ({
+      ...prev,
+      folders: prev.folders.map(folder =>
+        folder.id === folderId
+          ? { ...folder, name, description, color: color || folder.color, updatedAt: new Date() }
+          : folder
+      )
+    }));
+  };
+
+  // Mark student as completed (when they click "I'm Done" after mastery)
+  const markAsCompleted = (studentId: string) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: 'completed' as const } : s
+      )
+    }));
+  };
+
+  // Generate feedback for a single student (teacher-initiated)
+  const generateFeedbackForStudent = async (studentId: string): Promise<boolean> => {
+    const submission = state.submissions[studentId];
+    const task = state.tasks.find(t => t.id === submission?.taskId);
+
+    if (!submission || !task) {
+      console.error('No submission or task found for student:', studentId);
+      return false;
+    }
+
+    // Set status to 'generating'
+    setState(prev => ({
+      ...prev,
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: 'generating' as const } : s
+      )
+    }));
+
+    try {
+      // Generate feedback using AI
+      const feedback = await generateFeedback(task.prompt, task.successCriteria, submission.content);
+
+      // Update submission with feedback and set status to 'submitted'
+      setState(prev => ({
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'submitted' as const } : s
+        ),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            ...prev.submissions[studentId],
+            feedback
+          }
+        },
+        // Increment credits used
+        credits: {
+          ...prev.credits,
+          used: prev.credits.used + 1,
+          remaining: prev.credits.remaining - 1
+        }
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Failed to generate feedback:', error);
+      // Revert status back to ready_for_feedback
+      setState(prev => ({
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'ready_for_feedback' as const } : s
+        )
+      }));
+      return false;
+    }
+  };
+
+  // Batch generate feedback for multiple students
+  const generateFeedbackBatch = async (studentIds: string[]): Promise<{ success: number; failed: number }> => {
+    let success = 0;
+    let failed = 0;
+
+    for (const studentId of studentIds) {
+      const result = await generateFeedbackForStudent(studentId);
+      if (result) {
+        success++;
+      } else {
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  };
+
+  // Regenerate feedback for a student (uses 1 credit)
+  const regenerateFeedback = async (studentId: string): Promise<boolean> => {
+    const submission = state.submissions[studentId];
+    const task = state.tasks.find(t => t.id === submission?.taskId);
+
+    if (!submission || !task) {
+      console.error('No submission or task found for student:', studentId);
+      return false;
+    }
+
+    try {
+      // Generate new feedback
+      const feedback = await generateFeedback(task.prompt, task.successCriteria, submission.content);
+
+      // Update submission with new feedback
+      setState(prev => ({
+        ...prev,
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            ...prev.submissions[studentId],
+            feedback
+          }
+        },
+        // Increment credits used
+        credits: {
+          ...prev.credits,
+          used: prev.credits.used + 1,
+          remaining: prev.credits.remaining - 1
+        }
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Failed to regenerate feedback:', error);
+      return false;
+    }
+  };
+
   return {
     state,
     addTask,
@@ -232,9 +491,17 @@ export function useAppStore(teacherId?: string) {
     selectTask,
     resetDemo,
     setSelectedNextStep,
+    saveSelectedNextStep,
+    submitRevision,
+    markAsCompleted,
     deactivateTask,
     reactivateTask,
     createFolder,
-    moveTaskToFolder
+    moveTaskToFolder,
+    deleteFolder,
+    updateFolder,
+    generateFeedbackForStudent,
+    generateFeedbackBatch,
+    regenerateFeedback
   };
 }

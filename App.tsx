@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { FeedbackView } from './components/student/FeedbackView';
 import { StudentEntry } from './components/student/StudentEntry';
+import { StudentRevisionView } from './components/student/StudentRevisionView';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { TeacherReviewView } from './components/teacher/TeacherReviewView';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Button } from './components/ui/Button';
+import { Card } from './components/ui/Card';
 import { FeedbackSession, NextStep } from './types';
 import { GraduationCap, School, ChevronLeft, Trash2, LogIn } from 'lucide-react';
 import { useAppStore } from './lib/store';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
+import { getTaskFromCode } from './lib/taskCodes';
 
 // Mock Insights
 const MOCK_INSIGHTS = [
@@ -29,46 +32,71 @@ function App() {
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
 
   // Store actions (now teacher-scoped)
-  const { state, addTask, addStudent, submitWork, approveFeedback, updateFeedback, getStudentStatus, selectTask, resetDemo, setSelectedNextStep } = useAppStore(currentTeacher?.id);
+  const {
+    state,
+    addTask,
+    addStudent,
+    submitWork,
+    approveFeedback,
+    updateFeedback,
+    getStudentStatus,
+    selectTask,
+    resetDemo,
+    setSelectedNextStep,
+    saveSelectedNextStep,
+    submitRevision,
+    markAsCompleted,
+    deactivateTask,
+    reactivateTask,
+    createFolder,
+    moveTaskToFolder,
+    deleteFolder,
+    updateFolder,
+    generateFeedbackForStudent,
+    generateFeedbackBatch,
+    regenerateFeedback
+  } = useAppStore(currentTeacher?.id);
 
   // Student Local State
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
+  const [studentTaskId, setStudentTaskId] = useState<string | null>(null); // Track which task student is working on
 
   // Teacher Review State
   const [reviewingStudentId, setReviewingStudentId] = useState<string | null>(null);
 
-  // Check for logged-in teacher on mount
+  // Check for logged-in teacher or demo mode on mount
   useEffect(() => {
     const teacher = getCurrentTeacher();
     if (teacher) {
       setCurrentTeacher(teacher);
+      setCurrentView('teacher_dashboard');
+    } else if (sessionStorage.getItem('lara-demo-mode') === 'active') {
+      // Restore demo mode on refresh
+      setCurrentView('teacher_dashboard');
     }
   }, []);
 
-  // Check for taskCode or studentId in URL parameters on mount
+  // Check for taskCode or studentId in URL parameters on mount ONLY
+  // This should only run once - not on every state change
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const taskCode = params.get('taskCode');
     const studentId = params.get('studentId');
 
     if (taskCode) {
-      // New flow: Task code provided - go to student flow
-      // The StudentEntry component will handle joining with the task code
+      // New flow: Task code provided - get task from global mapping (works without teacher context)
+      const taskFromGlobal = getTaskFromCode(taskCode);
+      if (taskFromGlobal) {
+        setStudentTaskId(taskFromGlobal.id);
+      }
       setCurrentView('student_flow');
     } else if (studentId) {
       // Legacy flow: Student ID provided - restore session
-      const status = getStudentStatus(studentId);
-      if (status) {
-        // Valid student - restore their session
-        setCurrentStudentId(studentId);
-        setCurrentView('student_flow');
-      } else {
-        // Invalid student ID - clear URL and go to landing
-        window.history.replaceState({}, '', window.location.pathname);
-        setCurrentView('landing');
-      }
+      setCurrentStudentId(studentId);
+      setCurrentView('student_flow');
     }
-  }, [getStudentStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount
 
   // Polling effect to check for feedback approval
   useEffect(() => {
@@ -83,24 +111,35 @@ function App() {
     }
   }, [currentView, currentStudentId, getStudentStatus]);
 
-  const handleStudentJoin = (name: string) => {
+  const handleStudentJoin = (name: string, taskId?: string) => {
     const student = addStudent(name);
     setCurrentStudentId(student.id);
 
-    // Add student ID to URL
+    // Set the task ID if provided
+    if (taskId) {
+      setStudentTaskId(taskId);
+    }
+
+    // Add student ID to URL (keep taskCode if present)
     const url = new URL(window.location.href);
     url.searchParams.set('studentId', student.id);
     window.history.pushState({}, '', url);
   };
 
-  const handleStudentSubmit = (content: string, feedback: FeedbackSession, timeElapsed?: number) => {
-    if (currentStudentId && state.tasks[0]) {
-      submitWork(currentStudentId, state.tasks[0].id, content, feedback, timeElapsed);
+  const handleStudentSubmit = (content: string, feedback: FeedbackSession | null, timeElapsed?: number, taskId?: string) => {
+    // Use the provided taskId, or fall back to studentTaskId, or the current selected task
+    const actualTaskId = taskId || studentTaskId || state.currentTaskId;
+    if (currentStudentId && actualTaskId) {
+      submitWork(currentStudentId, actualTaskId, content, feedback, timeElapsed);
     }
   };
 
   const handleStudentContinue = (step: NextStep) => {
     setSelectedNextStep(step);
+    // Save the selected step to the submission for teacher visibility
+    if (currentStudentId) {
+      saveSelectedNextStep(currentStudentId, step);
+    }
     setCurrentView('student_revision');
   };
 
@@ -117,6 +156,7 @@ function App() {
   const handleTeacherLogin = () => {
     const teacher = getCurrentTeacher();
     if (teacher) {
+      sessionStorage.removeItem('lara-demo-mode'); // Clear demo mode when logging in
       setCurrentTeacher(teacher);
       setCurrentView('teacher_dashboard');
     }
@@ -124,6 +164,7 @@ function App() {
 
   const handleTeacherLogout = () => {
     logOut();
+    sessionStorage.removeItem('lara-demo-mode');
     setCurrentTeacher(null);
     setCurrentView('landing');
   };
@@ -174,7 +215,10 @@ function App() {
                     </button>
 
                     <button
-                        onClick={() => setCurrentView('teacher_dashboard')}
+                        onClick={() => {
+                          sessionStorage.setItem('lara-demo-mode', 'active');
+                          setCurrentView('teacher_dashboard');
+                        }}
                         className="w-full group relative flex items-center p-4 rounded-xl border border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50/30 transition-all duration-200"
                     >
                         <div className="w-12 h-12 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
@@ -228,7 +272,10 @@ function App() {
         <DashboardLayout
             activeTab={activeTab}
             onNavigate={setActiveTab}
-            onExit={() => setCurrentView('landing')}
+            onExit={() => {
+              sessionStorage.removeItem('lara-demo-mode');
+              setCurrentView('landing');
+            }}
             teacherName={currentTeacher?.name}
             onLogout={handleTeacherLogout}
         >
@@ -240,10 +287,20 @@ function App() {
                 tasks={state.tasks}
                 submissions={state.submissions}
                 selectedTaskId={state.currentTaskId}
+                folders={state.folders}
+                credits={state.credits}
                 onCreateTask={addTask}
                 onApproveFeedback={approveFeedback}
                 onNavigateToReview={handleNavigateToReview}
                 onSelectTask={selectTask}
+                onDeactivateTask={deactivateTask}
+                onReactivateTask={reactivateTask}
+                onCreateFolder={createFolder}
+                onMoveTaskToFolder={moveTaskToFolder}
+                onDeleteFolder={deleteFolder}
+                onUpdateFolder={updateFolder}
+                onGenerateFeedback={generateFeedbackForStudent}
+                onGenerateFeedbackBatch={generateFeedbackBatch}
             />
         </DashboardLayout>
     );
@@ -252,6 +309,7 @@ function App() {
   if (currentView === 'teacher_review' && reviewingStudentId) {
     const student = state.students.find(s => s.id === reviewingStudentId);
     const submission = state.submissions[reviewingStudentId];
+    const task = submission ? state.tasks.find(t => t.id === submission.taskId) : undefined;
 
     if (!student || !submission) {
       // Handle invalid state by going back to dashboard
@@ -263,12 +321,14 @@ function App() {
       <TeacherReviewView
         student={student}
         submission={submission}
+        task={task}
         onBack={handleBackFromReview}
-        onApprove={(studentId) => {
-          approveFeedback(studentId);
+        onApprove={(studentId, isMastered) => {
+          approveFeedback(studentId, isMastered);
           handleBackFromReview();
         }}
         onUpdateFeedback={updateFeedback}
+        onRegenerateFeedback={regenerateFeedback}
       />
     );
   }
@@ -276,20 +336,30 @@ function App() {
   if (currentView === 'student_flow') {
     const status = currentStudentId ? getStudentStatus(currentStudentId) : null;
     const isFeedbackReady = status === 'feedback_ready' || status === 'revising';
+    const isCompleted = status === 'completed';
+    const submission = currentStudentId ? state.submissions[currentStudentId] : null;
 
     // Get taskCode from URL if present
     const params = new URLSearchParams(window.location.search);
     const urlTaskCode = params.get('taskCode');
 
-    // Find the task - either by taskCode or use the current task
-    let currentTask = state.tasks.find(t => t.id === state.currentTaskId);
+    // Find the task - prioritize: global task lookup > studentTaskId > currentTaskId > first task
+    let currentTask: typeof state.tasks[0] | undefined;
+
+    // FIRST: Try to get task from global mapping (this works without teacher context)
     if (urlTaskCode) {
-      const taskByCode = state.tasks.find(t => t.taskCode === urlTaskCode.toUpperCase());
-      if (taskByCode) {
-        currentTask = taskByCode;
+      const taskFromGlobal = getTaskFromCode(urlTaskCode);
+      if (taskFromGlobal) {
+        currentTask = taskFromGlobal;
       }
     }
-    // Fallback to first task if no current task
+
+    // SECOND: Try to use the studentTaskId (set when student joined or from submission)
+    if (!currentTask && studentTaskId) {
+      currentTask = state.tasks.find(t => t.id === studentTaskId);
+    }
+
+    // THIRD: Fallback to first task if nothing else works (demo mode)
     if (!currentTask) {
       currentTask = state.tasks[0];
     }
@@ -318,13 +388,45 @@ function App() {
       );
     }
 
+    // If student has completed the task, show completion view
+    if (isCompleted && currentStudentId) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+          <Card className="max-w-md w-full p-8 text-center space-y-6">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <GraduationCap className="w-10 h-10" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-slate-900">Task Complete!</h2>
+              <p className="text-slate-600">
+                Great work! You've successfully completed this task.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setCurrentView('landing')}
+            >
+              Back to Start
+            </Button>
+          </Card>
+        </div>
+      );
+    }
+
     // If feedback approved, show feedback view
-    if (isFeedbackReady && currentStudentId && state.submissions[currentStudentId]?.feedback) {
+    if (isFeedbackReady && currentStudentId && submission?.feedback) {
+      const handleComplete = () => {
+        markAsCompleted(currentStudentId);
+      };
+
       return (
         <div className="bg-slate-50 min-h-screen">
           <FeedbackView
-              sessionData={state.submissions[currentStudentId].feedback!}
-              onContinue={handleStudentContinue}
+            sessionData={submission.feedback}
+            onContinue={handleStudentContinue}
+            masteryConfirmed={submission.masteryConfirmed}
+            onComplete={handleComplete}
           />
         </div>
       );
@@ -334,9 +436,9 @@ function App() {
     return (
        <StudentEntry
           task={currentTask}
-          onJoin={handleStudentJoin}
-          onSubmitWork={handleStudentSubmit}
-          isPending={status === 'submitted'}
+          onJoin={(name) => handleStudentJoin(name, currentTask?.id)}
+          onSubmitWork={(content, feedback, timeElapsed) => handleStudentSubmit(content, feedback, timeElapsed, currentTask?.id)}
+          isPending={status === 'ready_for_feedback' || status === 'generating' || status === 'submitted'}
           studentId={currentStudentId || undefined}
           taskCode={urlTaskCode || undefined}
        />
@@ -344,40 +446,37 @@ function App() {
   }
 
   if (currentView === 'student_revision') {
-      const selectedStep = state.selectedNextStep;
+    const selectedStep = state.selectedNextStep;
+    const submission = currentStudentId ? state.submissions[currentStudentId] : null;
 
-      return (
-          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-              <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6 mx-auto animate-bounce">
-                    <School className="w-8 h-8" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">Ready to Revise</h2>
+    // Find task for context
+    let revisionTask = studentTaskId ? state.tasks.find(t => t.id === studentTaskId) : state.tasks[0];
 
-                {selectedStep && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6 text-left">
-                    <h3 className="font-semibold text-emerald-900 mb-2">Your Selected Next Step:</h3>
-                    <p className="text-sm text-emerald-800 mb-1">
-                      <span className="font-medium">{selectedStep.actionVerb}</span> {selectedStep.target}
-                    </p>
-                    <p className="text-xs text-emerald-700">
-                      Success looks like: {selectedStep.successIndicator}
-                    </p>
-                  </div>
-                )}
+    // Get taskCode from URL if present for global lookup
+    const params = new URLSearchParams(window.location.search);
+    const urlTaskCode = params.get('taskCode');
+    if (urlTaskCode && !revisionTask) {
+      revisionTask = getTaskFromCode(urlTaskCode) || undefined;
+    }
 
-                <p className="text-slate-600 mb-8 leading-relaxed">
-                    Great choice! You have selected a next step.
-                    <br/><span className="text-sm text-slate-400 mt-2 block">In the full app, the editor would open here with your selected focus area highlighted.</span>
-                </p>
-                <Button variant="outline" className="w-full" onClick={() => {
-                  setCurrentView('landing');
-                }}>
-                    Back to Demo Start
-                </Button>
-              </div>
-          </div>
-      )
+    // MVP1: Revisions saved but no AI feedback generated (deferred feature)
+    const handleRevisionSubmit = (content: string, timeElapsed: number) => {
+      if (currentStudentId && revisionTask) {
+        submitRevision(currentStudentId, revisionTask.id, content, timeElapsed);
+        setSelectedNextStep(null);
+        setCurrentView('student_flow');
+      }
+    };
+
+    return (
+      <StudentRevisionView
+        task={revisionTask}
+        selectedStep={selectedStep}
+        submission={submission}
+        onSubmitRevision={handleRevisionSubmit}
+        onCancel={() => setCurrentView('student_flow')}
+      />
+    );
   }
 
   return null;

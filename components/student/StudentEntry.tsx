@@ -3,15 +3,13 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Task, FeedbackSession } from '../../types';
-import { User, BookOpen, Clock, Send, FileText } from 'lucide-react';
-import { generateFeedback } from '../../lib/gemini';
-import confetti from 'canvas-confetti';
+import { User, BookOpen, Clock, Send } from 'lucide-react';
 
 interface StudentEntryProps {
   task: Task;
   onJoin: (name: string) => void;
-  onSubmitWork: (content: string, feedback: FeedbackSession, timeElapsed?: number) => void;
-  isPending: boolean; // Is waiting for teacher approval
+  onSubmitWork: (content: string, feedback: FeedbackSession | null, timeElapsed?: number) => void;
+  isPending: boolean; // Is waiting for teacher to generate and approve feedback
   studentId?: string; // Student ID for generating shareable link
   taskCode?: string; // Task code from URL (for task-specific access)
 }
@@ -24,7 +22,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
   studentId,
   taskCode
 }) => {
-  const [step, setStep] = useState<'name' | 'work' | 'analyzing' | 'waiting'>('name');
+  const [step, setStep] = useState<'name' | 'work' | 'waiting'>('name');
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
 
@@ -68,48 +66,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Confetti animation
-  const triggerConfetti = () => {
-    const duration = 3 * 1000;
-    const animationEnd = Date.now() + duration;
-    const colors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981'];
-
-    const randomInRange = (min: number, max: number) => {
-      return Math.random() * (max - min) + min;
-    };
-
-    const interval = setInterval(() => {
-      const timeLeft = animationEnd - Date.now();
-      if (timeLeft <= 0) {
-        return clearInterval(interval);
-      }
-
-      const particleCount = 50 * (timeLeft / duration);
-
-      confetti({
-        particleCount,
-        startVelocity: 30,
-        spread: 360,
-        origin: {
-          x: randomInRange(0.1, 0.3),
-          y: Math.random() - 0.2
-        },
-        colors: colors
-      });
-
-      confetti({
-        particleCount,
-        startVelocity: 30,
-        spread: 360,
-        origin: {
-          x: randomInRange(0.7, 0.9),
-          y: Math.random() - 0.2
-        },
-        colors: colors
-      });
-    }, 250);
-  };
-
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
@@ -121,27 +77,10 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
   const handleSubmit = async () => {
     if (!content.trim()) return;
 
-    setStep('analyzing');
-    triggerConfetti(); // Trigger confetti animation
-
-    try {
-      // Call Gemini API
-      const feedback = await generateFeedback(task.prompt, task.successCriteria, content);
-
-      // Submit to store with timeElapsed (which sets status to 'submitted')
-      onSubmitWork(content, feedback, timeElapsed);
-      // Parent component will re-render and might keep us in 'waiting' if not approved
-    } catch (error) {
-      console.error('Failed to generate feedback:', error);
-      setStep('work'); // Return to work state so student can retry
-
-      // Show user-friendly error message
-      alert(
-        'Sorry, we could not generate feedback at this time. ' +
-        'Please check your internet connection and try again. ' +
-        'If the problem persists, contact your teacher.'
-      );
-    }
+    // MVP1: No AI call on submit - teacher initiates feedback generation
+    // Submit with null feedback, status will be set to 'ready_for_feedback'
+    onSubmitWork(content, null, timeElapsed);
+    setStep('waiting');
   };
 
   if (step === 'name') {
@@ -191,75 +130,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
     );
   }
 
-  if (step === 'analyzing') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center justify-center space-y-6 max-w-md"
-        >
-          {/* Animated Icon */}
-          <div className="relative">
-            <motion.div
-              animate={{
-                scale: [1, 1.1, 1]
-              }}
-              transition={{
-                duration: 1.5,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-              className="w-20 h-20 rounded-full bg-brand-500 flex items-center justify-center shadow-2xl shadow-brand-500/50"
-            >
-              <FileText className="w-10 h-10 text-white" />
-            </motion.div>
-
-            {/* Pulsing rings */}
-            <motion.div
-              animate={{
-                scale: [1, 1.3],
-                opacity: [0.5, 0]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeOut"
-              }}
-              className="absolute inset-0 rounded-full border-4 border-brand-500"
-            />
-          </div>
-
-          {/* Loading Messages */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-2"
-          >
-            <h2 className="text-2xl font-bold text-slate-900">
-              Analyzing your work...
-            </h2>
-            <p className="text-sm text-slate-500">
-              LARA is preparing personalized feedback for you
-            </p>
-          </motion.div>
-
-          {/* Progress Bar */}
-          <div className="w-full max-w-xs">
-            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: "0%" }}
-                animate={{ width: "100%" }}
-                transition={{ duration: 3, ease: "easeInOut" }}
-                className="h-full bg-brand-500"
-              />
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
   if (step === 'waiting' || isPending) {
     const baseUrl = import.meta.env.VITE_BASE_URL || window.location.origin;
 
@@ -280,9 +150,9 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             </div>
 
             <div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Waiting for Approval</h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Work Submitted</h2>
               <p className="text-slate-600">
-                Your teacher has received your work and is reviewing the feedback.
+                Your teacher will prepare your feedback shortly.
               </p>
             </div>
 

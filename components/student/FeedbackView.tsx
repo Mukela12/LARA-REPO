@@ -3,15 +3,22 @@ import { FeedbackSession, NextStep } from '../../types';
 import { GoalBox } from './GoalBox';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { CheckCircle2, AlertCircle, ArrowRight, CornerDownRight, Sparkles } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowRight, CornerDownRight, Sparkles, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface FeedbackViewProps {
   sessionData: FeedbackSession;
   onContinue: (step: NextStep) => void;
+  masteryConfirmed?: boolean;
+  onComplete?: () => void;
 }
 
-export const FeedbackView: React.FC<FeedbackViewProps> = ({ sessionData, onContinue }) => {
+export const FeedbackView: React.FC<FeedbackViewProps> = ({
+  sessionData,
+  onContinue,
+  masteryConfirmed = false,
+  onComplete
+}) => {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
   const selectedStep = sessionData.nextSteps.find(s => s.id === selectedStepId);
@@ -19,10 +26,30 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({ sessionData, onConti
   return (
     <div className="min-h-screen bg-slate-50 pb-32">
       {/* Principle 1 & 2: Start with the Goal */}
-      <GoalBox 
-        goalText={sessionData.goal} 
-        universal={false} 
+      <GoalBox
+        goalText={sessionData.goal}
+        universal={false}
       />
+
+      {/* Neutral feedback received banner */}
+      {masteryConfirmed && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-xl mx-auto px-4 pt-6"
+        >
+          <div className="bg-slate-100 border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-slate-200 p-2 rounded-full">
+                <CheckCircle className="w-5 h-5 text-slate-600" />
+              </div>
+              <p className="text-slate-700">
+                Your teacher has reviewed your work. See the feedback below.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
         
@@ -87,22 +114,40 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({ sessionData, onConti
           </div>
         </motion.section>
 
-        {/* Card 3: Choose One Next Step (Mandatory Choice) */}
-        <motion.section 
+        {/* Card 3: Choose One Next Step (Mandatory or Optional based on mastery) */}
+        <motion.section
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-md shadow-brand-500/5 border border-brand-100 ring-4 ring-brand-50 overflow-hidden"
+          className={`bg-white rounded-2xl shadow-md overflow-hidden ${
+            masteryConfirmed
+              ? 'shadow-emerald-500/5 border border-emerald-100 ring-4 ring-emerald-50'
+              : 'shadow-brand-500/5 border border-brand-100 ring-4 ring-brand-50'
+          }`}
         >
-          <div className="px-5 py-4 border-b border-brand-100 flex items-center gap-2.5 bg-gradient-to-r from-brand-50 to-white">
-             <div className="bg-brand-100 p-1.5 rounded-full text-brand-600">
-                <CornerDownRight className="w-4 h-4" />
+          <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${
+            masteryConfirmed
+              ? 'border-emerald-100 bg-gradient-to-r from-emerald-50 to-white'
+              : 'border-brand-100 bg-gradient-to-r from-brand-50 to-white'
+          }`}>
+             <div className={`p-1.5 rounded-full ${
+               masteryConfirmed
+                 ? 'bg-emerald-100 text-emerald-600'
+                 : 'bg-brand-100 text-brand-600'
+             }`}>
+                {masteryConfirmed ? <Sparkles className="w-4 h-4" /> : <CornerDownRight className="w-4 h-4" />}
             </div>
-            <h2 className="font-semibold text-brand-900 text-sm uppercase tracking-wide">Select Next Step</h2>
+            <h2 className={`font-semibold text-sm uppercase tracking-wide ${
+              masteryConfirmed ? 'text-emerald-900' : 'text-brand-900'
+            }`}>
+              {masteryConfirmed ? 'Challenge Yourself (Optional)' : 'Select Next Step'}
+            </h2>
           </div>
-          <div className="p-2 bg-brand-50/10">
+          <div className={`p-2 ${masteryConfirmed ? 'bg-emerald-50/10' : 'bg-brand-50/10'}`}>
             <p className="px-4 pt-3 pb-2 text-xs text-slate-500 font-medium">
-              Choose the action you will take to improve your work:
+              {masteryConfirmed
+                ? 'Want to push yourself further? Try one of these optional challenges:'
+                : 'Choose the action you will take to improve your work:'}
             </p>
             <div className="space-y-2 p-2">
               {sessionData.nextSteps.map((step) => (
@@ -145,17 +190,44 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({ sessionData, onConti
 
       {/* Floating Action Bar - Mobile First Sticky Footer */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 shadow-lg z-50">
-        <div className="max-w-xl mx-auto">
-          <Button 
-            className="w-full h-12 text-base shadow-brand-500/20 shadow-lg font-semibold tracking-wide" 
-            size="lg"
-            variant="primary"
-            disabled={!selectedStepId}
-            onClick={() => selectedStep && onContinue(selectedStep)}
-            leftIcon={<ArrowRight className="w-5 h-5" />}
-          >
-            {selectedStep ? `Continue: ${selectedStep.ctaText}` : "Select a step to continue"}
-          </Button>
+        <div className="max-w-xl mx-auto space-y-2">
+          {masteryConfirmed ? (
+            <>
+              {/* Primary: Finish button - neutral language */}
+              <Button
+                className="w-full h-12 text-base font-semibold tracking-wide"
+                size="lg"
+                variant="primary"
+                onClick={onComplete}
+                leftIcon={<CheckCircle className="w-5 h-5" />}
+              >
+                Finish
+              </Button>
+              {/* Secondary: Optional next step */}
+              {selectedStepId && selectedStep && (
+                <Button
+                  className="w-full h-10 text-sm font-medium"
+                  size="md"
+                  variant="outline"
+                  onClick={() => onContinue(selectedStep)}
+                  leftIcon={<Sparkles className="w-4 h-4" />}
+                >
+                  Optional: {selectedStep.ctaText}
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button
+              className="w-full h-12 text-base shadow-brand-500/20 shadow-lg font-semibold tracking-wide"
+              size="lg"
+              variant="primary"
+              disabled={!selectedStepId}
+              onClick={() => selectedStep && onContinue(selectedStep)}
+              leftIcon={<ArrowRight className="w-5 h-5" />}
+            >
+              {selectedStep ? `Continue: ${selectedStep.ctaText}` : "Select a step to continue"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

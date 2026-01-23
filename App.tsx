@@ -67,6 +67,7 @@ function App() {
   const [studentTaskId, setStudentTaskId] = useState<string | null>(null); // Track which task student is working on
   const [studentSessionId, setStudentSessionId] = useState<string | null>(null); // Backend session ID
   const [studentTask, setStudentTask] = useState<{id: string; title: string; prompt: string; successCriteria: string[]} | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(false); // Loading state for session restore
 
   // Teacher Review State
   const [reviewingStudentId, setReviewingStudentId] = useState<string | null>(null);
@@ -103,15 +104,16 @@ function App() {
       }
       setCurrentView('student_flow');
     } else if (studentId) {
-      // Returning student - restore their session from backend
-      console.log('[RESTORE] Starting session restore for studentId:', studentId);
+      // Returning student - immediately show student flow with loading state
+      setCurrentView('student_flow');
+      setIsRestoringSession(true);
+      setCurrentStudentId(studentId);
+
+      // Restore their session from backend
       authApi.restoreSession(studentId)
         .then((response) => {
-          console.log('[RESTORE] API Response:', JSON.stringify(response, null, 2));
-
           // Set up the session state
           setStudentToken(response.token);
-          setCurrentStudentId(response.studentId);
           setStudentSessionId(response.sessionId);
           setStudentTaskId(response.task.id);
           setStudentTask({
@@ -121,14 +123,11 @@ function App() {
             successCriteria: response.task.successCriteria,
           });
 
-          // First, add the student to the local store
-          console.log('[RESTORE] Calling restoreStudent with:', response.studentId, response.studentName, response.status);
+          // Add the student to the local store
           restoreStudent(response.studentId, response.studentName, response.status as Student['status']);
 
           // If feedback is ready, update local state with submission and feedback
-          console.log('[RESTORE] feedbackReady:', response.feedbackReady, 'feedback exists:', !!response.feedback);
           if (response.feedbackReady && response.feedback) {
-            console.log('[RESTORE] Calling submitWork with feedback');
             submitWork(
               response.studentId,
               response.task.id,
@@ -137,10 +136,8 @@ function App() {
               undefined
             );
             if (response.status === 'completed') {
-              console.log('[RESTORE] Marking as completed');
               markAsCompleted(response.studentId);
             } else if (response.status === 'feedback_ready' || response.status === 'revising') {
-              console.log('[RESTORE] Calling approveFeedback, masteryConfirmed:', response.masteryConfirmed);
               approveFeedback(response.studentId, response.masteryConfirmed);
             }
           }
@@ -149,15 +146,12 @@ function App() {
           const url = new URL(window.location.href);
           url.searchParams.set('sessionId', response.sessionId);
           window.history.replaceState({}, '', url);
-
-          console.log('[RESTORE] Setting view to student_flow');
-          setCurrentView('student_flow');
         })
         .catch((error) => {
-          console.error('[RESTORE] Failed to restore session:', error);
-          // Fall back to showing student entry
-          setCurrentStudentId(studentId);
-          setCurrentView('student_flow');
+          console.error('Failed to restore session:', error);
+        })
+        .finally(() => {
+          setIsRestoringSession(false);
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -422,6 +416,18 @@ function App() {
   if (currentView === 'student_flow') {
     const status = currentStudentId ? getStudentStatus(currentStudentId) : null;
     const submission = currentStudentId ? state.submissions[currentStudentId] : null;
+
+    // Show loading state while restoring session
+    if (isRestoringSession) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-600">Loading your session...</p>
+          </div>
+        </div>
+      );
+    }
 
     // Check feedback status - use submission data as source of truth for restored sessions
     const hasFeedback = !!(submission?.feedback);

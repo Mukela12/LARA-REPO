@@ -421,18 +421,15 @@ function App() {
 
   if (currentView === 'student_flow') {
     const status = currentStudentId ? getStudentStatus(currentStudentId) : null;
-    const isFeedbackReady = status === 'feedback_ready' || status === 'revising';
-    const isCompleted = status === 'completed';
     const submission = currentStudentId ? state.submissions[currentStudentId] : null;
 
-    // DEBUG LOGGING
-    console.log('[RENDER student_flow] currentStudentId:', currentStudentId);
-    console.log('[RENDER student_flow] status:', status);
-    console.log('[RENDER student_flow] isFeedbackReady:', isFeedbackReady);
-    console.log('[RENDER student_flow] isCompleted:', isCompleted);
-    console.log('[RENDER student_flow] submission:', submission);
-    console.log('[RENDER student_flow] submission?.feedback:', submission?.feedback);
-    console.log('[RENDER student_flow] state.students:', state.students);
+    // Check feedback status - use submission data as source of truth for restored sessions
+    const hasFeedback = !!(submission?.feedback);
+    const isMasteryConfirmed = submission?.masteryConfirmed === true;
+
+    // Status can come from state.students OR be inferred from submission
+    const isFeedbackReady = status === 'feedback_ready' || status === 'revising' || (hasFeedback && !isMasteryConfirmed);
+    const isCompleted = status === 'completed' || isMasteryConfirmed;
 
     // Get taskCode from URL if present
     const params = new URLSearchParams(window.location.search);

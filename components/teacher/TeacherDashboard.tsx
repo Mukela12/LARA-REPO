@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ClassInsight, Student, Task, Submission, Folder, TeacherCredits } from '../../types';
-import { Users, Clock, ArrowUpRight, Copy, Plus, ClipboardCheck, List, Check, Power, PowerOff, Zap, Loader2 } from 'lucide-react';
+import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CreateTaskForm } from './CreateTaskForm';
@@ -10,8 +10,8 @@ import { StudentList } from './StudentList';
 import { TaskList } from './TaskList';
 import { TaskSelector } from './TaskSelector';
 import { FolderManagement } from './FolderManagement';
+import { ShareTaskCard } from './ShareTaskCard';
 import { useAppStore } from '../../lib/store';
-import { formatTaskCode } from '../../lib/taskCodes';
 
 interface TeacherDashboardProps {
   insights: ClassInsight[];
@@ -60,7 +60,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onGenerateFeedback,
   onGenerateFeedbackBatch
 }) => {
-  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [generatingStudentId, setGeneratingStudentId] = useState<string | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -73,21 +72,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   });
 
   const activeStudents = taskStudents.filter(s => s.status !== 'completed').length;
-
-  // Copy task link to clipboard
-  const handleCopyTaskLink = () => {
-    if (!currentTask?.taskCode) return;
-
-    const baseUrl = import.meta.env.VITE_BASE_URL || window.location.origin;
-    const taskLink = `${baseUrl}?taskCode=${currentTask.taskCode}`;
-
-    navigator.clipboard.writeText(taskLink).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    }).catch(() => {
-      // Silent fail - clipboard API may not be available
-    });
-  };
 
   // Helper for Student List Table
   const StatusBadge = ({ status }: { status: string }) => {
@@ -198,7 +182,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           <div className="flex gap-6">
             {/* Folder Sidebar */}
             <div className="w-64 flex-shrink-0">
-              <Card className="sticky top-4">
+              <Card className="sticky top-4" data-tutorial="folders">
                 <FolderManagement
                   folders={folders}
                   selectedFolderId={selectedFolderId}
@@ -274,23 +258,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <Power className="w-3.5 h-3.5" /> Live
                   </span>
                 )}
-                {currentTask?.taskCode && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400">Task Code:</span>
-                    <button
-                      onClick={handleCopyTaskLink}
-                      className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-2 hover:bg-brand-100 hover:text-brand-700 transition-colors"
-                      disabled={currentTask?.status === 'inactive'}
-                    >
-                      {formatTaskCode(currentTask.taskCode)}
-                      {linkCopied ? (
-                        <Check className="w-3 h-3 text-emerald-600" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -325,6 +292,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 size="sm"
                 onClick={() => onNavigate('create')}
                 leftIcon={<Plus className="w-4 h-4" />}
+                data-tutorial="create-task"
               >
                 New Task
               </Button>
@@ -338,6 +306,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </div>
           )}
         </div>
+
+        {/* Share Task Card */}
+        {currentTask?.taskCode && (
+          <ShareTaskCard
+            taskCode={currentTask.taskCode}
+            isDisabled={currentTask.status === 'inactive'}
+          />
+        )}
       </div>
 
       {/* Stats Grid */}
@@ -353,7 +329,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </Card>
 
         {/* Ready for Feedback - with batch generate button */}
-        <Card className="border-purple-200 bg-purple-50">
+        <Card className="border-purple-200 bg-purple-50" data-tutorial="generate-feedback">
              <h3 className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Ready for Feedback</h3>
              <div className="flex items-center justify-between mt-2">
                  <div className="flex items-center gap-3">

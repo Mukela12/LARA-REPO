@@ -6,6 +6,7 @@ import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { TeacherReviewView } from './components/teacher/TeacherReviewView';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import { OnboardingProvider } from './components/onboarding/OnboardingProvider';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { FeedbackSession, NextStep } from './types';
@@ -301,6 +302,7 @@ function App() {
 
   if (currentView === 'teacher_dashboard') {
     return (
+      <OnboardingProvider>
         <DashboardLayout
             activeTab={activeTab}
             onNavigate={setActiveTab}
@@ -332,6 +334,7 @@ function App() {
                 onGenerateFeedbackBatch={generateFeedbackBatch}
             />
         </DashboardLayout>
+      </OnboardingProvider>
     );
   }
 

@@ -36,9 +36,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
+              data-tutorial={item.id === 'create' ? 'create-task' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                isActive 
-                  ? 'bg-brand-50 text-brand-700' 
+                isActive
+                  ? 'bg-brand-50 text-brand-700'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >

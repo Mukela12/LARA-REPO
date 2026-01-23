@@ -102,9 +102,50 @@ function App() {
       }
       setCurrentView('student_flow');
     } else if (studentId) {
-      // Legacy flow: Student ID provided - restore session
-      setCurrentStudentId(studentId);
-      setCurrentView('student_flow');
+      // Returning student - restore their session from backend
+      authApi.restoreSession(studentId)
+        .then((response) => {
+          // Set up the session state
+          setStudentToken(response.token);
+          setCurrentStudentId(response.studentId);
+          setStudentSessionId(response.sessionId);
+          setStudentTaskId(response.task.id);
+          setStudentTask({
+            id: response.task.id,
+            title: response.task.title,
+            prompt: response.task.prompt,
+            successCriteria: response.task.successCriteria,
+          });
+
+          // If feedback is ready, update local state
+          if (response.feedbackReady && response.feedback) {
+            submitWork(
+              response.studentId,
+              response.task.id,
+              response.submission?.content || '',
+              response.feedback as FeedbackSession,
+              undefined
+            );
+            if (response.status === 'completed') {
+              markAsCompleted(response.studentId);
+            } else if (response.status === 'feedback_ready' || response.status === 'revising') {
+              approveFeedback(response.studentId, response.masteryConfirmed);
+            }
+          }
+
+          // Update URL to include sessionId
+          const url = new URL(window.location.href);
+          url.searchParams.set('sessionId', response.sessionId);
+          window.history.replaceState({}, '', url);
+
+          setCurrentView('student_flow');
+        })
+        .catch((error) => {
+          console.error('Failed to restore session:', error);
+          // Fall back to showing student entry
+          setCurrentStudentId(studentId);
+          setCurrentView('student_flow');
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount

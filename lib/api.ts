@@ -95,6 +95,28 @@ export interface StudentJoinResponse {
   };
 }
 
+export interface StudentRestoreResponse {
+  token: string;
+  studentId: string;
+  studentName: string;
+  sessionId: string;
+  status: string;
+  task: {
+    id: string;
+    title: string;
+    prompt: string;
+    successCriteria: string[];
+    status: 'active' | 'inactive';
+  };
+  feedbackReady: boolean;
+  feedback?: FeedbackData;
+  masteryConfirmed: boolean;
+  submission?: {
+    content: string;
+    timestamp: number;
+  };
+}
+
 export const authApi = {
   register: (email: string, password: string, name: string): Promise<AuthResponse> =>
     apiFetch('/api/auth/register', {
@@ -116,6 +138,9 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ taskCode, studentName }),
     }),
+
+  restoreSession: (studentId: string): Promise<StudentRestoreResponse> =>
+    apiFetch(`/api/auth/session/restore/${studentId}`),
 };
 
 // ==================== Tasks API ====================

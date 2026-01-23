@@ -240,4 +240,78 @@ router.post('/session/join', async (req, res: Response) => {
   }
 });
 
+// Student restores session by studentId (for returning students)
+router.get('/session/restore/:studentId', async (req, res: Response) => {
+  try {
+    const studentId = req.params.studentId;
+
+    // Find the student with their session and task info
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        session: {
+          include: {
+            task: true,
+          },
+        },
+        submissions: {
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+          include: { feedback: true },
+        },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const session = student.session;
+    const task = session.task;
+    const latestSubmission = student.submissions[0];
+
+    // Generate a new token for this student
+    const token = generateStudentToken(student.id, session.id);
+
+    // Prepare feedback if available and released
+    let feedback = null;
+    let feedbackReady = false;
+    if (latestSubmission?.feedbackStatus === 'released' && latestSubmission.feedback) {
+      feedbackReady = true;
+      feedback = {
+        goal: latestSubmission.feedback.goal,
+        masteryAchieved: latestSubmission.feedback.masteryAchieved,
+        strengths: latestSubmission.feedback.strengths,
+        growthAreas: latestSubmission.feedback.growthAreas,
+        nextSteps: latestSubmission.feedback.nextSteps,
+      };
+    }
+
+    return res.json({
+      token,
+      studentId: student.id,
+      studentName: student.name,
+      sessionId: session.id,
+      status: student.status,
+      task: {
+        id: task.id,
+        title: task.title,
+        prompt: task.prompt,
+        successCriteria: task.successCriteria,
+        status: task.status,
+      },
+      feedbackReady,
+      feedback,
+      masteryConfirmed: latestSubmission?.feedback?.masteryAchieved || false,
+      submission: latestSubmission ? {
+        content: latestSubmission.content,
+        timestamp: latestSubmission.timestamp.getTime(),
+      } : null,
+    });
+  } catch (error) {
+    console.error('Session restore error:', error);
+    return res.status(500).json({ error: 'Failed to restore session' });
+  }
+});
+
 export default router;

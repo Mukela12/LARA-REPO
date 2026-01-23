@@ -84,8 +84,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     navigator.clipboard.writeText(taskLink).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
-    }).catch(err => {
-      console.error('Failed to copy link:', err);
+    }).catch(() => {
+      // Silent fail - clipboard API may not be available
     });
   };
 
@@ -427,7 +427,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     {taskStudents.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
-                          No students joined yet. Join using the Student View.
+                          No students have joined this task yet. Share the task code to invite students.
                         </td>
                       </tr>
                     ) : (

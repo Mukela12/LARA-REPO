@@ -32,6 +32,7 @@ export interface Task {
   taskCode?: string; // 6-digit alphanumeric code for student access
   status: 'active' | 'inactive';
   folderId?: string | null;
+  liveSessionId?: string | null; // ID of active live session for this task
   createdAt: Date;
   updatedAt: Date;
 }

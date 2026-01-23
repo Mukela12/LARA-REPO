@@ -134,6 +134,7 @@ export interface TaskResponse {
   updatedAt: string;
   folder?: FolderResponse | null;
   _count?: { sessions: number };
+  liveSessionId?: string | null;
 }
 
 export interface CreateTaskRequest {

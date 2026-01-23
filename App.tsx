@@ -56,7 +56,8 @@ function App() {
     updateFolder,
     generateFeedbackForStudent,
     generateFeedbackBatch,
-    regenerateFeedback
+    regenerateFeedback,
+    loadSessionDashboard
   } = store;
 
   // Student Local State
@@ -129,6 +130,24 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [currentView, currentStudentId, studentSessionId, getStudentStatus]);
+
+  // Polling effect for teacher dashboard - refresh session data every 5 seconds
+  useEffect(() => {
+    if (currentView === 'teacher_dashboard' && currentTeacher && state.currentTaskId) {
+      const task = state.tasks.find(t => t.id === state.currentTaskId);
+      if (task?.liveSessionId) {
+        // Initial load when task is selected
+        loadSessionDashboard(task.liveSessionId);
+
+        // Poll every 5 seconds for updates
+        const interval = setInterval(() => {
+          loadSessionDashboard(task.liveSessionId!);
+        }, 5000);
+
+        return () => clearInterval(interval);
+      }
+    }
+  }, [currentView, currentTeacher, state.currentTaskId, state.tasks, loadSessionDashboard]);
 
   const handleStudentJoin = async (name: string, taskId?: string) => {
     // Check if we have a task code in URL for backend join

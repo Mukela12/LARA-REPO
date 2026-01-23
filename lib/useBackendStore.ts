@@ -29,6 +29,7 @@ function taskResponseToTask(t: TaskResponse): Task {
     universalExpectations: t.universalExpectations,
     status: t.status,
     folderId: t.folderId,
+    liveSessionId: t.liveSessionId,
     createdAt: new Date(t.createdAt),
     updatedAt: new Date(t.updatedAt),
   };
@@ -395,8 +396,26 @@ export function useBackendStore(teacherId?: string) {
   };
 
   // Other state operations
-  const selectTask = (taskId: string) => {
+  const selectTask = async (taskId: string) => {
     setState(prev => ({ ...prev, currentTaskId: taskId }));
+
+    // Find the task and load session data if it has a live session
+    const task = state.tasks.find(t => t.id === taskId);
+    if (task?.liveSessionId) {
+      try {
+        await loadSessionDashboard(task.liveSessionId);
+      } catch (error) {
+        console.error('Failed to load session dashboard:', error);
+      }
+    } else {
+      // Clear students/submissions when no live session
+      setState(prev => ({
+        ...prev,
+        students: [],
+        submissions: {},
+        currentSessionId: null,
+      }));
+    }
   };
 
   const setSelectedNextStep = (step: NextStep | null) => {

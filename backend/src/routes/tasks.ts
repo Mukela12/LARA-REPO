@@ -26,11 +26,23 @@ router.get('/', authenticateTeacher, async (req: AuthenticatedRequest, res: Resp
         _count: {
           select: { sessions: true },
         },
+        sessions: {
+          where: { isLive: true },
+          select: { id: true },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.json(tasks);
+    // Map to include liveSessionId at top level
+    const tasksWithLiveSession = tasks.map(task => ({
+      ...task,
+      liveSessionId: task.sessions[0]?.id || null,
+      sessions: undefined, // Remove the sessions array from response
+    }));
+
+    return res.json(tasksWithLiveSession);
   } catch (error) {
     console.error('Get tasks error:', error);
     return res.status(500).json({ error: 'Failed to get tasks' });

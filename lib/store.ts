@@ -480,6 +480,16 @@ export function useAppStore(teacherId?: string) {
     }
   };
 
+  // No-op for local store (backend only feature)
+  const loadSessionDashboard = async (_sessionId: string) => {
+    // Local store doesn't support session dashboards
+  };
+
+  // No-op for local store (backend only feature)
+  const loadData = async () => {
+    // Local store loads from localStorage automatically
+  };
+
   return {
     state,
     addTask,
@@ -502,6 +512,8 @@ export function useAppStore(teacherId?: string) {
     updateFolder,
     generateFeedbackForStudent,
     generateFeedbackBatch,
-    regenerateFeedback
+    regenerateFeedback,
+    loadSessionDashboard,
+    loadData
   };
 }

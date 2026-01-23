@@ -86,6 +86,26 @@ NOTE: If masteryAchieved is true, nextSteps should be optional "challenge yourse
   }
   jsonText = jsonText.trim();
 
+  // Extract JSON object - find the outermost { } pair
+  const firstBrace = jsonText.indexOf('{');
+  if (firstBrace !== -1) {
+    let depth = 0;
+    let lastBrace = -1;
+    for (let i = firstBrace; i < jsonText.length; i++) {
+      if (jsonText[i] === '{') depth++;
+      else if (jsonText[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          lastBrace = i;
+          break;
+        }
+      }
+    }
+    if (lastBrace !== -1) {
+      jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+    }
+  }
+
   // Parse JSON from response
   const data = JSON.parse(jsonText);
 

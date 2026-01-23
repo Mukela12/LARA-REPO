@@ -349,22 +349,27 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
             });
 
             // Create or update feedback record
+            // Cast arrays to JSON-compatible format for Prisma
+            const strengthsJson = JSON.parse(JSON.stringify(feedback.strengths));
+            const growthAreasJson = JSON.parse(JSON.stringify(feedback.growthAreas));
+            const nextStepsJson = JSON.parse(JSON.stringify(feedback.nextSteps));
+
             await tx.submissionFeedback.upsert({
               where: { submissionId: pgSubmissionId },
               create: {
                 submissionId: pgSubmissionId!,
                 goal: feedback.goal,
                 masteryAchieved: feedback.masteryAchieved || false,
-                strengths: feedback.strengths,
-                growthAreas: feedback.growthAreas,
-                nextSteps: feedback.nextSteps,
+                strengths: strengthsJson,
+                growthAreas: growthAreasJson,
+                nextSteps: nextStepsJson,
               },
               update: {
                 goal: feedback.goal,
                 masteryAchieved: feedback.masteryAchieved || false,
-                strengths: feedback.strengths,
-                growthAreas: feedback.growthAreas,
-                nextSteps: feedback.nextSteps,
+                strengths: strengthsJson,
+                growthAreas: growthAreasJson,
+                nextSteps: nextStepsJson,
               },
             });
 

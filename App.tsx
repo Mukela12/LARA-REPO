@@ -417,8 +417,16 @@ function App() {
     const status = currentStudentId ? getStudentStatus(currentStudentId) : null;
     const submission = currentStudentId ? state.submissions[currentStudentId] : null;
 
-    // Show loading state while restoring session
-    if (isRestoringSession) {
+    // Get URL params
+    const params = new URLSearchParams(window.location.search);
+    const urlTaskCode = params.get('taskCode');
+    const urlStudentId = params.get('studentId');
+
+    // Check if we're restoring a session (studentId in URL without taskCode)
+    const isRestoredSession = urlStudentId && !urlTaskCode;
+
+    // Show loading state while restoring session OR while waiting for submission data to populate
+    if (isRestoringSession || (isRestoredSession && !submission)) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="text-center">
@@ -436,10 +444,6 @@ function App() {
     // Status can come from state.students OR be inferred from submission
     const isFeedbackReady = status === 'feedback_ready' || status === 'revising' || (hasFeedback && !isMasteryConfirmed);
     const isCompleted = status === 'completed' || isMasteryConfirmed;
-
-    // Get taskCode from URL if present
-    const params = new URLSearchParams(window.location.search);
-    const urlTaskCode = params.get('taskCode');
 
     // Find the task - prioritize: backend task > global task lookup > studentTaskId > currentTaskId > first task
     let currentTask: typeof state.tasks[0] | undefined;

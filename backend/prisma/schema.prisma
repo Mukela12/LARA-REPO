@@ -12,24 +12,25 @@ datasource db {
 
 // Teacher/User Management
 model Teacher {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  name        String
-  schoolId    String?
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String
+  passwordHash  String?  // Proper password storage (migrated from schoolId)
+  schoolId      String?  // Deprecated: was used for password, now for actual school ID
 
   // Tier & Usage
-  tier        String   @default("starter")
-  aiCallsUsed Int      @default(0)
-  aiCallsReset DateTime @default(now()) // Monthly reset date
+  tier          String   @default("starter")
+  aiCallsUsed   Int      @default(0)
+  aiCallsReset  DateTime @default(now()) // Monthly reset date
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
-  tasks       Task[]
-  folders     Folder[]
-  sessions    TaskSession[]
-  usageLogs   AiUsageLog[]
+  tasks         Task[]
+  folders       Folder[]
+  sessions      TaskSession[]
+  usageLogs     AiUsageLog[]
 
   @@index([email])
 }
@@ -103,10 +104,88 @@ model TaskSession {
   // Relations
   task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  students    Student[]
+  studentSubmissions StudentSubmission[]
 
   @@index([taskId])
   @@index([teacherId])
   @@index([isLive])
+}
+
+// Student (persisted for data durability)
+model Student {
+  id          String    @id @default(uuid())
+  sessionId   String
+  name        String
+
+  // Status tracking
+  status      String    @default("active") // active, ready_for_feedback, generating, submitted, feedback_ready, revising, completed
+
+  joinedAt    DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  session     TaskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  submissions StudentSubmission[]
+
+  @@index([sessionId])
+  @@index([status])
+}
+
+// Student Submission (persisted for data durability)
+model StudentSubmission {
+  id              String    @id @default(uuid())
+  studentId       String
+  sessionId       String
+
+  // Submission content
+  content         String    @db.Text
+  previousContent String?   @db.Text
+
+  // Metadata
+  timeElapsed     Int?      // seconds
+  revisionCount   Int       @default(0)
+  isRevision      Boolean   @default(false)
+
+  // Feedback status
+  feedbackStatus  String    @default("pending") // pending, generated, approved, released
+  validationWarnings String[]
+
+  // Selected next step (if student chose one)
+  selectedNextStepId String?
+
+  timestamp       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session         TaskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  feedback        SubmissionFeedback?
+
+  @@index([studentId])
+  @@index([sessionId])
+  @@index([feedbackStatus])
+}
+
+// Submission Feedback (AI-generated feedback persisted)
+model SubmissionFeedback {
+  id              String    @id @default(uuid())
+  submissionId    String    @unique
+
+  // Feedback content (stored as JSON)
+  goal            String    @db.Text
+  masteryAchieved Boolean   @default(false)
+
+  // Structured feedback stored as JSON
+  strengths       Json      // Array of FeedbackItem
+  growthAreas     Json      // Array of FeedbackItem
+  nextSteps       Json      // Array of NextStep
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  submission      StudentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 }
 
 // AI Usage Log (Audit Trail)

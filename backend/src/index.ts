@@ -7,6 +7,7 @@ import authRoutes from './routes/auth';
 import taskRoutes from './routes/tasks';
 import folderRoutes from './routes/folders';
 import sessionRoutes from './routes/sessions';
+import { validateDatabaseConnection, disconnectDatabase } from './lib/prisma';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,12 +57,37 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Start server
-const HOST = '0.0.0.0';
-app.listen(Number(PORT), HOST, () => {
-  console.log(`🚀 LARA Backend running on ${HOST}:${PORT}`);
-  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-});
+// Start server with database validation
+async function startServer() {
+  const HOST = '0.0.0.0';
+
+  // Validate database connection before accepting requests
+  const dbConnected = await validateDatabaseConnection();
+  if (!dbConnected) {
+    console.error('Failed to connect to database. Exiting...');
+    process.exit(1);
+  }
+
+  const server = app.listen(Number(PORT), HOST, () => {
+    console.log(`🚀 LARA Backend running on ${HOST}:${PORT}`);
+    console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+  });
+
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+    server.close(async () => {
+      await disconnectDatabase();
+      console.log('Server closed. Database disconnected.');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+startServer();
 
 export default app;

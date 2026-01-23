@@ -23,14 +23,13 @@ router.post('/register', async (req, res: Response) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // For MVP, we'll store a hashed password in schoolId field (hacky but works for demo)
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const teacher = await prisma.teacher.create({
       data: {
         email,
         name,
-        schoolId: hashedPassword, // Storing hashed password here for MVP
+        passwordHash: hashedPassword, // Proper password storage
         tier: 'classroom', // Default to classroom tier for pilot
       },
     });
@@ -62,13 +61,30 @@ router.post('/login', async (req, res: Response) => {
     }
 
     const teacher = await prisma.teacher.findUnique({ where: { email } });
-    if (!teacher || !teacher.schoolId) {
+    if (!teacher) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const validPassword = await bcrypt.compare(password, teacher.schoolId);
+    // Check passwordHash first (new), then schoolId (legacy) for backward compatibility
+    const passwordToCheck = teacher.passwordHash || teacher.schoolId;
+    if (!passwordToCheck) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, passwordToCheck);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // If still using legacy schoolId, migrate to passwordHash
+    if (!teacher.passwordHash && teacher.schoolId) {
+      await prisma.teacher.update({
+        where: { id: teacher.id },
+        data: {
+          passwordHash: teacher.schoolId,
+          schoolId: null, // Clear legacy field
+        },
+      });
     }
 
     const token = generateTeacherToken(teacher.id);
@@ -168,7 +184,26 @@ router.post('/session/join', async (req, res: Response) => {
     // Create student ID
     const studentId = uuidv4();
 
-    // Store student in Redis if available
+    // Dual-write: Persist student to Postgres (source of truth) and Redis (real-time cache)
+    await prisma.$transaction(async (tx) => {
+      // Create student in Postgres for durability
+      await tx.student.create({
+        data: {
+          id: studentId,
+          sessionId: session.id,
+          name: studentName,
+          status: 'active',
+        },
+      });
+
+      // Update session student count
+      await tx.taskSession.update({
+        where: { id: session.id },
+        data: { totalStudents: { increment: 1 } },
+      });
+    });
+
+    // Also store in Redis for real-time access (cache layer)
     if (redis) {
       const studentData: StudentSessionData = {
         id: studentId,
@@ -183,12 +218,6 @@ router.post('/session/join', async (req, res: Response) => {
         JSON.stringify(studentData)
       );
       await redis.expire(sessionKeys.students(session.id), SESSION_TTL);
-
-      // Update session student count
-      await prisma.taskSession.update({
-        where: { id: session.id },
-        data: { totalStudents: { increment: 1 } },
-      });
     }
 
     // Generate student token

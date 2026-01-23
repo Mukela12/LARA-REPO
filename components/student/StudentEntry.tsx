@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Task, FeedbackSession } from '../../types';
-import { User, BookOpen, Clock, Send } from 'lucide-react';
+import { User, BookOpen, Clock, Send, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface StudentEntryProps {
   task: Task;
@@ -12,6 +12,8 @@ interface StudentEntryProps {
   isPending: boolean; // Is waiting for teacher to generate and approve feedback
   studentId?: string; // Student ID for generating shareable link
   taskCode?: string; // Task code from URL (for task-specific access)
+  submissionError?: string | null; // Error message if submission failed
+  onRetrySubmit?: () => void; // Callback to retry submission
 }
 
 export const StudentEntry: React.FC<StudentEntryProps> = ({
@@ -20,7 +22,9 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
   onSubmitWork,
   isPending,
   studentId,
-  taskCode
+  taskCode,
+  submissionError,
+  onRetrySubmit
 }) => {
   const [step, setStep] = useState<'name' | 'work' | 'waiting'>('name');
   const [name, setName] = useState('');
@@ -220,6 +224,28 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
        </div>
 
        <main className="max-w-2xl mx-auto p-4 space-y-6">
+         {/* Submission Error Banner */}
+         {submissionError && (
+           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+             <div className="flex-1">
+               <p className="text-sm font-medium text-red-800">Submission failed</p>
+               <p className="text-sm text-red-700 mt-1">{submissionError}</p>
+               {onRetrySubmit && (
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={onRetrySubmit}
+                   className="mt-2 text-red-700 border-red-300 hover:bg-red-100"
+                 >
+                   <RefreshCw className="w-4 h-4 mr-1" />
+                   Try Again
+                 </Button>
+               )}
+             </div>
+           </div>
+         )}
+
          <div className="bg-brand-50 border border-brand-100 rounded-xl p-5">
            <h3 className="text-sm font-bold text-brand-800 uppercase tracking-wide mb-2">Prompt</h3>
            <p className="text-slate-800 leading-relaxed">{task.prompt}</p>

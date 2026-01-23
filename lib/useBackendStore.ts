@@ -136,6 +136,8 @@ export function useBackendStore(teacherId?: string) {
             revisionCount: s.submission.revisionCount,
             previousContent: s.submission.previousContent,
             isRevision: s.submission.isRevision,
+            feedbackStatus: s.submission.feedbackStatus,
+            validationWarnings: s.submission.validationWarnings,
           };
         }
       });

@@ -69,6 +69,14 @@ function App() {
   // Teacher Review State
   const [reviewingStudentId, setReviewingStudentId] = useState<string | null>(null);
 
+  // Student submission error state
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [lastSubmittedContent, setLastSubmittedContent] = useState<{content: string; timeElapsed?: number; taskId?: string} | null>(null);
+
+  // Polling backoff state
+  const [pollFailureCount, setPollFailureCount] = useState(0);
+  const maxPollFailures = 5; // Stop polling after 5 consecutive failures
+
   // Check for logged-in teacher on mount
   useEffect(() => {
     const teacher = getCurrentTeacher();
@@ -100,14 +108,28 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount
 
-  // Polling effect to check for feedback approval
+  // Polling effect to check for feedback approval with exponential backoff
   useEffect(() => {
     if (currentView === 'student_flow' && currentStudentId) {
-      const interval = setInterval(async () => {
+      // Don't poll if we've hit max failures
+      if (pollFailureCount >= maxPollFailures) {
+        console.warn('Polling stopped after max failures');
+        return;
+      }
+
+      // Calculate polling interval with exponential backoff
+      const baseInterval = 2000; // 2 seconds
+      const backoffMultiplier = Math.pow(2, pollFailureCount);
+      const pollInterval = Math.min(baseInterval * backoffMultiplier, 30000); // Max 30 seconds
+
+      const poll = async () => {
         // If using backend, poll for feedback
         if (studentSessionId && getStudentToken()) {
           try {
             const response = await sessionsApi.getFeedback(studentSessionId, currentStudentId);
+            // Reset failure count on success
+            setPollFailureCount(0);
+
             if (response.feedbackReady && response.feedback) {
               // Update local state with feedback
               const actualTaskId = studentTaskId || state.currentTaskId;
@@ -120,16 +142,20 @@ function App() {
               }
             }
           } catch (error) {
-            // Ignore polling errors
+            // Increment failure count for backoff
+            setPollFailureCount(prev => prev + 1);
+            console.error('Polling failed, backing off:', error);
           }
         } else {
           // Demo mode - just check local status
           getStudentStatus(currentStudentId);
         }
-      }, 2000);
+      };
+
+      const interval = setInterval(poll, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [currentView, currentStudentId, studentSessionId, getStudentStatus]);
+  }, [currentView, currentStudentId, studentSessionId, getStudentStatus, pollFailureCount]);
 
   // Polling effect for teacher dashboard - refresh session data every 5 seconds
   useEffect(() => {
@@ -196,20 +222,35 @@ function App() {
     // Use the provided taskId, or fall back to studentTaskId, or the current selected task
     const actualTaskId = taskId || studentTaskId || state.currentTaskId;
 
+    // Clear any previous submission error
+    setSubmissionError(null);
+
     // If we have a backend session, submit via API
     if (studentSessionId && getStudentToken()) {
       try {
         await sessionsApi.submitWork(studentSessionId, content, timeElapsed);
+        // Clear saved content on success
+        setLastSubmittedContent(null);
         // Update local state to show waiting
         if (currentStudentId) {
           submitWork(currentStudentId, actualTaskId, content, null, timeElapsed);
         }
       } catch (error) {
         console.error('Failed to submit work:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to submit your work. Please try again.';
+        setSubmissionError(errorMessage);
+        // Save content for retry
+        setLastSubmittedContent({ content, timeElapsed, taskId: actualTaskId });
       }
     } else if (currentStudentId && actualTaskId) {
       // Demo mode - use local store
       submitWork(currentStudentId, actualTaskId, content, feedback, timeElapsed);
+    }
+  };
+
+  const handleRetrySubmit = () => {
+    if (lastSubmittedContent) {
+      handleStudentSubmit(lastSubmittedContent.content, null, lastSubmittedContent.timeElapsed, lastSubmittedContent.taskId);
     }
   };
 
@@ -444,6 +485,8 @@ function App() {
           isPending={status === 'ready_for_feedback' || status === 'generating' || status === 'submitted'}
           studentId={currentStudentId || undefined}
           taskCode={urlTaskCode || undefined}
+          submissionError={submissionError}
+          onRetrySubmit={handleRetrySubmit}
        />
     );
   }

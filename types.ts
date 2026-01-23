@@ -83,6 +83,8 @@ export interface Submission {
   selectedNextStep?: NextStep;    // Full next step object for context
   isRevision?: boolean;           // Flag for teacher to know it's a resubmit
   masteryConfirmed?: boolean;     // Teacher confirmed mastery
+  feedbackStatus?: 'pending' | 'generated' | 'approved' | 'released'; // Backend feedback status
+  validationWarnings?: string[];  // Backend validation warnings
 }
 
 export interface ClassInsight {

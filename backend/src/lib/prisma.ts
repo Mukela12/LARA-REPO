@@ -12,4 +12,21 @@ export const prisma =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
+// Health check function to validate database connection
+export async function validateDatabaseConnection(): Promise<boolean> {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('✓ Database connection validated');
+    return true;
+  } catch (error) {
+    console.error('✗ Database connection failed:', error);
+    return false;
+  }
+}
+
+// Graceful shutdown
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect();
+}
+
 export default prisma;

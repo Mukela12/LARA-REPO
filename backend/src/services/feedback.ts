@@ -110,24 +110,27 @@ export async function logAiUsage(
   sessionId?: string,
   validationWarnings: string[] = []
 ): Promise<void> {
-  await prisma.aiUsageLog.create({
-    data: {
-      teacherId,
-      taskId,
-      sessionId,
-      operation,
-      studentCount,
-      model: CLAUDE_MODEL,
-      validationWarnings,
-    },
-  });
+  // Use transaction to ensure both operations succeed or fail together
+  await prisma.$transaction(async (tx) => {
+    await tx.aiUsageLog.create({
+      data: {
+        teacherId,
+        taskId,
+        sessionId,
+        operation,
+        studentCount,
+        model: CLAUDE_MODEL,
+        validationWarnings,
+      },
+    });
 
-  // Increment teacher's AI call usage
-  await prisma.teacher.update({
-    where: { id: teacherId },
-    data: {
-      aiCallsUsed: { increment: studentCount },
-    },
+    // Increment teacher's AI call usage
+    await tx.teacher.update({
+      where: { id: teacherId },
+      data: {
+        aiCallsUsed: { increment: studentCount },
+      },
+    });
   });
 }
 

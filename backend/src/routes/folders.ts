@@ -99,13 +99,16 @@ router.delete('/:folderId', authenticateTeacher, async (req: AuthenticatedReques
       return res.status(404).json({ error: 'Folder not found' });
     }
 
-    // Move tasks out of folder before deleting
-    await prisma.task.updateMany({
-      where: { folderId: folder.id },
-      data: { folderId: null },
-    });
+    // Use transaction to ensure atomic operation: move tasks then delete folder
+    await prisma.$transaction(async (tx) => {
+      // Move tasks out of folder before deleting
+      await tx.task.updateMany({
+        where: { folderId: folder.id },
+        data: { folderId: null },
+      });
 
-    await prisma.folder.delete({ where: { id: folder.id } });
+      await tx.folder.delete({ where: { id: folder.id } });
+    });
 
     return res.status(204).send();
   } catch (error) {

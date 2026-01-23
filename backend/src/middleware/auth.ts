@@ -3,7 +3,13 @@ import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest } from '../types';
 import prisma from '../lib/prisma';
 
+// JWT_SECRET must be set in production
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret';
+
+// Fail fast in production if JWT_SECRET is not properly configured
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable must be set in production');
+}
 
 export interface JWTPayload {
   teacherId?: string;

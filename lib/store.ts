@@ -125,6 +125,29 @@ export function useAppStore(teacherId?: string) {
     return newStudent;
   };
 
+  // Add or update a student with specific ID (for session restoration)
+  const restoreStudent = (studentId: string, name: string, status: Student['status']): Student => {
+    const student: Student = {
+      id: studentId,
+      name,
+      status,
+      joinedAt: Date.now()
+    };
+    setState(prev => {
+      const existingIndex = prev.students.findIndex(s => s.id === studentId);
+      if (existingIndex >= 0) {
+        // Update existing student
+        const updatedStudents = [...prev.students];
+        updatedStudents[existingIndex] = { ...updatedStudents[existingIndex], ...student };
+        return { ...prev, students: updatedStudents };
+      } else {
+        // Add new student
+        return { ...prev, students: [...prev.students, student] };
+      }
+    });
+    return student;
+  };
+
   // Submit work without feedback - teacher will generate later
   const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
     setState(prev => ({
@@ -494,6 +517,7 @@ export function useAppStore(teacherId?: string) {
     state,
     addTask,
     addStudent,
+    restoreStudent,
     submitWork,
     approveFeedback,
     updateFeedback,

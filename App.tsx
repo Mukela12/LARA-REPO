@@ -9,7 +9,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OnboardingProvider } from './components/onboarding/OnboardingProvider';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
-import { FeedbackSession, NextStep } from './types';
+import { FeedbackSession, NextStep, Student } from './types';
 import { GraduationCap, School } from 'lucide-react';
 import { useAppStore } from './lib/store';
 import { useBackendStore } from './lib/useBackendStore';
@@ -39,6 +39,7 @@ function App() {
     state,
     addTask,
     addStudent,
+    restoreStudent,
     submitWork,
     approveFeedback,
     updateFeedback,
@@ -117,7 +118,10 @@ function App() {
             successCriteria: response.task.successCriteria,
           });
 
-          // If feedback is ready, update local state
+          // First, add the student to the local store
+          restoreStudent(response.studentId, response.studentName, response.status as Student['status']);
+
+          // If feedback is ready, update local state with submission and feedback
           if (response.feedbackReady && response.feedback) {
             submitWork(
               response.studentId,

@@ -448,6 +448,27 @@ export function useBackendStore(teacherId?: string) {
     return newStudent;
   };
 
+  // Add or update a student with specific ID (for session restoration)
+  const restoreStudent = (studentId: string, name: string, status: Student['status']): Student => {
+    const student: Student = {
+      id: studentId,
+      name,
+      status,
+      joinedAt: Date.now(),
+    };
+    setState(prev => {
+      const existingIndex = prev.students.findIndex(s => s.id === studentId);
+      if (existingIndex >= 0) {
+        const updatedStudents = [...prev.students];
+        updatedStudents[existingIndex] = { ...updatedStudents[existingIndex], ...student };
+        return { ...prev, students: updatedStudents };
+      } else {
+        return { ...prev, students: [...prev.students, student] };
+      }
+    });
+    return student;
+  };
+
   const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
     setState(prev => ({
       ...prev,
@@ -531,6 +552,7 @@ export function useBackendStore(teacherId?: string) {
     state,
     addTask,
     addStudent,
+    restoreStudent,
     submitWork,
     approveFeedback,
     updateFeedback,

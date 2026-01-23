@@ -1,0 +1,535 @@
+// Backend-connected store for LARA
+// Uses API calls instead of localStorage for authenticated teachers
+
+import { useState, useEffect, useCallback } from 'react';
+import { Student, Task, FeedbackSession, Submission, NextStep, Folder, TeacherCredits } from '../types';
+import { tasksApi, foldersApi, sessionsApi, authApi, setStudentToken, getStudentToken, clearStudentToken, TaskResponse, FolderResponse } from './api';
+
+export interface BackendState {
+  tasks: Task[];
+  students: Student[];
+  submissions: Record<string, Submission>;
+  currentTaskId: string;
+  currentSessionId: string | null;
+  selectedNextStep: NextStep | null;
+  folders: Folder[];
+  credits: TeacherCredits;
+  isLoading: boolean;
+  error: string | null;
+}
+
+// Convert API response to frontend types
+function taskResponseToTask(t: TaskResponse): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    prompt: t.prompt,
+    taskCode: t.taskCode,
+    successCriteria: t.successCriteria,
+    universalExpectations: t.universalExpectations,
+    status: t.status,
+    folderId: t.folderId,
+    createdAt: new Date(t.createdAt),
+    updatedAt: new Date(t.updatedAt),
+  };
+}
+
+function folderResponseToFolder(f: FolderResponse): Folder {
+  return {
+    id: f.id,
+    name: f.name,
+    description: f.description || undefined,
+    color: f.color,
+    createdAt: new Date(f.createdAt),
+    updatedAt: new Date(f.updatedAt),
+  };
+}
+
+export function useBackendStore(teacherId?: string) {
+  const [state, setState] = useState<BackendState>({
+    tasks: [],
+    students: [],
+    submissions: {},
+    currentTaskId: '',
+    currentSessionId: null,
+    selectedNextStep: null,
+    folders: [],
+    credits: {
+      used: 0,
+      remaining: 800,
+      monthlyLimit: 800,
+    },
+    isLoading: true,
+    error: null,
+  });
+
+  // Load initial data from backend
+  const loadData = useCallback(async () => {
+    if (!teacherId) {
+      setState(prev => ({ ...prev, isLoading: false }));
+      return;
+    }
+
+    try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+      // Load tasks and folders in parallel
+      const [tasksResponse, foldersResponse, usageResponse] = await Promise.all([
+        tasksApi.getAll(),
+        foldersApi.getAll(),
+        sessionsApi.getUsage(),
+      ]);
+
+      const tasks = tasksResponse.map(taskResponseToTask);
+      const folders = foldersResponse.map(folderResponseToFolder);
+
+      setState(prev => ({
+        ...prev,
+        tasks,
+        folders,
+        currentTaskId: tasks[0]?.id || '',
+        credits: {
+          used: usageResponse.used,
+          remaining: usageResponse.remaining,
+          monthlyLimit: usageResponse.limit,
+        },
+        isLoading: false,
+      }));
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to load data',
+      }));
+    }
+  }, [teacherId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Load session dashboard data
+  const loadSessionDashboard = useCallback(async (sessionId: string) => {
+    try {
+      const dashboard = await sessionsApi.getDashboard(sessionId);
+
+      // Convert students and submissions
+      const students: Student[] = dashboard.students.map(s => ({
+        id: s.id,
+        name: s.name,
+        status: s.status as Student['status'],
+        joinedAt: s.joinedAt,
+      }));
+
+      const submissions: Record<string, Submission> = {};
+      dashboard.students.forEach(s => {
+        if (s.submission) {
+          submissions[s.id] = {
+            studentId: s.id,
+            taskId: dashboard.session.taskId,
+            content: s.submission.content,
+            feedback: s.submission.feedback as FeedbackSession | undefined,
+            timestamp: s.submission.timestamp,
+            timeElapsed: s.submission.timeElapsed,
+            revisionCount: s.submission.revisionCount,
+            previousContent: s.submission.previousContent,
+            isRevision: s.submission.isRevision,
+          };
+        }
+      });
+
+      setState(prev => ({
+        ...prev,
+        students,
+        submissions,
+        currentSessionId: sessionId,
+        currentTaskId: dashboard.session.taskId,
+        credits: {
+          used: dashboard.usage.used,
+          remaining: dashboard.usage.remaining,
+          monthlyLimit: dashboard.usage.limit,
+        },
+      }));
+
+      return dashboard;
+    } catch (error) {
+      console.error('Failed to load session dashboard:', error);
+      throw error;
+    }
+  }, []);
+
+  // Task operations
+  const addTask = async (task: Omit<Task, 'id' | 'taskCode' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const response = await tasksApi.create({
+        title: task.title,
+        prompt: task.prompt,
+        successCriteria: task.successCriteria,
+        universalExpectations: task.universalExpectations,
+        folderId: task.folderId,
+      });
+
+      const newTask = taskResponseToTask(response);
+      setState(prev => ({
+        ...prev,
+        tasks: [newTask, ...prev.tasks],
+        currentTaskId: newTask.id,
+      }));
+
+      return newTask;
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      throw error;
+    }
+  };
+
+  const deactivateTask = async (taskId: string) => {
+    try {
+      await tasksApi.updateStatus(taskId, 'inactive');
+      setState(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(t =>
+          t.id === taskId ? { ...t, status: 'inactive' as const, updatedAt: new Date() } : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to deactivate task:', error);
+      throw error;
+    }
+  };
+
+  const reactivateTask = async (taskId: string) => {
+    try {
+      await tasksApi.updateStatus(taskId, 'active');
+      setState(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(t =>
+          t.id === taskId ? { ...t, status: 'active' as const, updatedAt: new Date() } : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to reactivate task:', error);
+      throw error;
+    }
+  };
+
+  // Folder operations
+  const createFolder = async (name: string, description?: string, color?: string) => {
+    try {
+      const response = await foldersApi.create(name, description, color);
+      const newFolder = folderResponseToFolder(response);
+      setState(prev => ({
+        ...prev,
+        folders: [...prev.folders, newFolder],
+      }));
+      return newFolder.id;
+    } catch (error) {
+      console.error('Failed to create folder:', error);
+      throw error;
+    }
+  };
+
+  const moveTaskToFolder = async (taskId: string, folderId: string | null) => {
+    try {
+      await tasksApi.moveToFolder(taskId, folderId);
+      setState(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(t =>
+          t.id === taskId ? { ...t, folderId, updatedAt: new Date() } : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to move task:', error);
+      throw error;
+    }
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    try {
+      await foldersApi.delete(folderId);
+      setState(prev => ({
+        ...prev,
+        folders: prev.folders.filter(f => f.id !== folderId),
+        tasks: prev.tasks.map(t =>
+          t.folderId === folderId ? { ...t, folderId: null, updatedAt: new Date() } : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to delete folder:', error);
+      throw error;
+    }
+  };
+
+  const updateFolder = async (folderId: string, name: string, description?: string, color?: string) => {
+    try {
+      await foldersApi.update(folderId, name, description, color);
+      setState(prev => ({
+        ...prev,
+        folders: prev.folders.map(f =>
+          f.id === folderId ? { ...f, name, description, color: color || f.color, updatedAt: new Date() } : f
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to update folder:', error);
+      throw error;
+    }
+  };
+
+  // Feedback operations
+  const generateFeedbackForStudent = async (studentId: string): Promise<boolean> => {
+    if (!state.currentSessionId) {
+      console.error('No session ID');
+      return false;
+    }
+
+    try {
+      // Update local status to generating
+      setState(prev => ({
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'generating' as const } : s
+        ),
+      }));
+
+      const result = await sessionsApi.generateFeedback(state.currentSessionId, [studentId]);
+
+      if (result.results[0]?.success) {
+        // Reload dashboard to get the feedback
+        await loadSessionDashboard(state.currentSessionId);
+        return true;
+      } else {
+        // Revert status
+        setState(prev => ({
+          ...prev,
+          students: prev.students.map(s =>
+            s.id === studentId ? { ...s, status: 'ready_for_feedback' as const } : s
+          ),
+        }));
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to generate feedback:', error);
+      setState(prev => ({
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'ready_for_feedback' as const } : s
+        ),
+      }));
+      return false;
+    }
+  };
+
+  const generateFeedbackBatch = async (studentIds: string[]): Promise<{ success: number; failed: number }> => {
+    if (!state.currentSessionId) {
+      return { success: 0, failed: studentIds.length };
+    }
+
+    try {
+      const result = await sessionsApi.generateFeedback(state.currentSessionId, studentIds);
+
+      // Reload dashboard to get the feedback
+      await loadSessionDashboard(state.currentSessionId);
+
+      return {
+        success: result.generated,
+        failed: result.failed,
+      };
+    } catch (error) {
+      console.error('Failed to generate batch feedback:', error);
+      return { success: 0, failed: studentIds.length };
+    }
+  };
+
+  const approveFeedback = async (studentId: string, isMastered?: boolean) => {
+    if (!state.currentSessionId) return;
+
+    try {
+      await sessionsApi.approveFeedback(state.currentSessionId, studentId, isMastered || false);
+
+      setState(prev => ({
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId
+            ? { ...s, status: isMastered ? 'completed' as const : 'feedback_ready' as const }
+            : s
+        ),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            ...prev.submissions[studentId],
+            masteryConfirmed: isMastered,
+          },
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to approve feedback:', error);
+      throw error;
+    }
+  };
+
+  const updateFeedback = async (studentId: string, updatedFeedback: FeedbackSession) => {
+    if (!state.currentSessionId) return;
+
+    try {
+      await sessionsApi.editFeedback(state.currentSessionId, studentId, updatedFeedback);
+
+      setState(prev => ({
+        ...prev,
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            ...prev.submissions[studentId],
+            feedback: updatedFeedback,
+          },
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to update feedback:', error);
+      throw error;
+    }
+  };
+
+  const regenerateFeedback = async (studentId: string): Promise<boolean> => {
+    return generateFeedbackForStudent(studentId);
+  };
+
+  // Other state operations
+  const selectTask = (taskId: string) => {
+    setState(prev => ({ ...prev, currentTaskId: taskId }));
+  };
+
+  const setSelectedNextStep = (step: NextStep | null) => {
+    setState(prev => ({ ...prev, selectedNextStep: step }));
+  };
+
+  const getStudentStatus = (studentId: string) => {
+    return state.students.find(s => s.id === studentId)?.status;
+  };
+
+  const resetDemo = () => {
+    // For backend mode, just reload
+    loadData();
+  };
+
+  // Placeholder methods that work locally (for compatibility)
+  const addStudent = (name: string): Student => {
+    const newStudent: Student = {
+      id: `local-${Date.now()}`,
+      name,
+      status: 'active',
+      joinedAt: Date.now(),
+    };
+    setState(prev => ({
+      ...prev,
+      students: [...prev.students, newStudent],
+    }));
+    return newStudent;
+  };
+
+  const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s
+      ),
+      submissions: {
+        ...prev.submissions,
+        [studentId]: {
+          studentId,
+          taskId,
+          content,
+          feedback,
+          timestamp: Date.now(),
+          timeElapsed,
+          revisionCount: 0,
+        },
+      },
+    }));
+  };
+
+  const saveSelectedNextStep = (studentId: string, step: NextStep) => {
+    setState(prev => ({
+      ...prev,
+      submissions: {
+        ...prev.submissions,
+        [studentId]: {
+          ...prev.submissions[studentId],
+          selectedNextStepId: step.id,
+          selectedNextStep: step,
+        },
+      },
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: 'revising' as const } : s
+      ),
+    }));
+  };
+
+  const submitRevision = (studentId: string, taskId: string, newContent: string, timeElapsed?: number) => {
+    setState(prev => {
+      const existingSubmission = prev.submissions[studentId];
+      const currentRevisionCount = existingSubmission?.revisionCount || 0;
+
+      if (currentRevisionCount >= 3) return prev;
+
+      return {
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: 'ready_for_feedback' as const } : s
+        ),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            studentId,
+            taskId,
+            content: newContent,
+            feedback: null,
+            timestamp: Date.now(),
+            timeElapsed,
+            revisionCount: currentRevisionCount + 1,
+            previousContent: existingSubmission?.content,
+            selectedNextStepId: existingSubmission?.selectedNextStepId,
+            selectedNextStep: existingSubmission?.selectedNextStep,
+            isRevision: true,
+          },
+        },
+      };
+    });
+  };
+
+  const markAsCompleted = (studentId: string) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.map(s =>
+        s.id === studentId ? { ...s, status: 'completed' as const } : s
+      ),
+    }));
+  };
+
+  return {
+    state,
+    addTask,
+    addStudent,
+    submitWork,
+    approveFeedback,
+    updateFeedback,
+    getStudentStatus,
+    selectTask,
+    resetDemo,
+    setSelectedNextStep,
+    saveSelectedNextStep,
+    submitRevision,
+    markAsCompleted,
+    deactivateTask,
+    reactivateTask,
+    createFolder,
+    moveTaskToFolder,
+    deleteFolder,
+    updateFolder,
+    generateFeedbackForStudent,
+    generateFeedbackBatch,
+    regenerateFeedback,
+    loadSessionDashboard,
+    loadData,
+  };
+}

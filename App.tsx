@@ -11,8 +11,10 @@ import { Card } from './components/ui/Card';
 import { FeedbackSession, NextStep } from './types';
 import { GraduationCap, School, ChevronLeft, Trash2, LogIn } from 'lucide-react';
 import { useAppStore } from './lib/store';
+import { useBackendStore } from './lib/useBackendStore';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
 import { getTaskFromCode } from './lib/taskCodes';
+import { authApi, setStudentToken, getStudentToken, sessionsApi } from './lib/api';
 
 // Mock Insights
 const MOCK_INSIGHTS = [
@@ -30,8 +32,17 @@ function App() {
 
   // Teacher Authentication State
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Store actions (now teacher-scoped)
+  // Use backend store for logged-in teachers, localStorage store for demo mode
+  const localStore = useAppStore(isDemoMode ? undefined : currentTeacher?.id);
+  const backendStore = useBackendStore(currentTeacher?.id);
+
+  // Choose which store to use based on mode
+  const isUsingBackend = currentTeacher && !isDemoMode;
+  const store = isUsingBackend ? backendStore : localStore;
+
+  // Destructure from the active store
   const {
     state,
     addTask,
@@ -55,11 +66,13 @@ function App() {
     generateFeedbackForStudent,
     generateFeedbackBatch,
     regenerateFeedback
-  } = useAppStore(currentTeacher?.id);
+  } = store;
 
   // Student Local State
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
   const [studentTaskId, setStudentTaskId] = useState<string | null>(null); // Track which task student is working on
+  const [studentSessionId, setStudentSessionId] = useState<string | null>(null); // Backend session ID
+  const [studentTask, setStudentTask] = useState<{id: string; title: string; prompt: string; successCriteria: string[]} | null>(null);
 
   // Teacher Review State
   const [reviewingStudentId, setReviewingStudentId] = useState<string | null>(null);
@@ -69,9 +82,11 @@ function App() {
     const teacher = getCurrentTeacher();
     if (teacher) {
       setCurrentTeacher(teacher);
+      setIsDemoMode(false);
       setCurrentView('teacher_dashboard');
     } else if (sessionStorage.getItem('lara-demo-mode') === 'active') {
       // Restore demo mode on refresh
+      setIsDemoMode(true);
       setCurrentView('teacher_dashboard');
     }
   }, []);
@@ -101,35 +116,94 @@ function App() {
   // Polling effect to check for feedback approval
   useEffect(() => {
     if (currentView === 'student_flow' && currentStudentId) {
-      const interval = setInterval(() => {
-        // Force re-render to check status from store
-        // In a real app, this would be a socket listener or swr
-        const status = getStudentStatus(currentStudentId);
-        // Note: The StudentEntry component uses isPending prop which drives the view
-      }, 1000);
+      const interval = setInterval(async () => {
+        // If using backend, poll for feedback
+        if (studentSessionId && getStudentToken()) {
+          try {
+            const response = await sessionsApi.getFeedback(studentSessionId, currentStudentId);
+            if (response.feedbackReady && response.feedback) {
+              // Update local state with feedback
+              const actualTaskId = studentTaskId || state.currentTaskId;
+              submitWork(currentStudentId, actualTaskId, state.submissions[currentStudentId]?.content || '', response.feedback as FeedbackSession, undefined);
+              // Update status
+              if (response.masteryConfirmed) {
+                markAsCompleted(currentStudentId);
+              } else {
+                approveFeedback(currentStudentId, response.masteryConfirmed);
+              }
+            }
+          } catch (error) {
+            // Ignore polling errors
+          }
+        } else {
+          // Demo mode - just check local status
+          getStudentStatus(currentStudentId);
+        }
+      }, 2000);
       return () => clearInterval(interval);
     }
-  }, [currentView, currentStudentId, getStudentStatus]);
+  }, [currentView, currentStudentId, studentSessionId, getStudentStatus]);
 
-  const handleStudentJoin = (name: string, taskId?: string) => {
-    const student = addStudent(name);
-    setCurrentStudentId(student.id);
+  const handleStudentJoin = async (name: string, taskId?: string) => {
+    // Check if we have a task code in URL for backend join
+    const params = new URLSearchParams(window.location.search);
+    const urlTaskCode = params.get('taskCode');
 
-    // Set the task ID if provided
-    if (taskId) {
-      setStudentTaskId(taskId);
+    if (urlTaskCode) {
+      // Use backend API to join session
+      try {
+        const response = await authApi.joinSession(urlTaskCode, name);
+        setStudentToken(response.token);
+        setCurrentStudentId(response.studentId);
+        setStudentSessionId(response.sessionId);
+        setStudentTaskId(response.task.id);
+        setStudentTask(response.task);
+
+        // Update URL with student ID
+        const url = new URL(window.location.href);
+        url.searchParams.set('studentId', response.studentId);
+        url.searchParams.set('sessionId', response.sessionId);
+        window.history.pushState({}, '', url);
+      } catch (error) {
+        console.error('Failed to join session:', error);
+        // Fallback to local mode
+        const student = addStudent(name);
+        setCurrentStudentId(student.id);
+        if (taskId) setStudentTaskId(taskId);
+      }
+    } else {
+      // Demo mode - use local store
+      const student = addStudent(name);
+      setCurrentStudentId(student.id);
+
+      if (taskId) {
+        setStudentTaskId(taskId);
+      }
+
+      // Add student ID to URL
+      const url = new URL(window.location.href);
+      url.searchParams.set('studentId', student.id);
+      window.history.pushState({}, '', url);
     }
-
-    // Add student ID to URL (keep taskCode if present)
-    const url = new URL(window.location.href);
-    url.searchParams.set('studentId', student.id);
-    window.history.pushState({}, '', url);
   };
 
-  const handleStudentSubmit = (content: string, feedback: FeedbackSession | null, timeElapsed?: number, taskId?: string) => {
+  const handleStudentSubmit = async (content: string, feedback: FeedbackSession | null, timeElapsed?: number, taskId?: string) => {
     // Use the provided taskId, or fall back to studentTaskId, or the current selected task
     const actualTaskId = taskId || studentTaskId || state.currentTaskId;
-    if (currentStudentId && actualTaskId) {
+
+    // If we have a backend session, submit via API
+    if (studentSessionId && getStudentToken()) {
+      try {
+        await sessionsApi.submitWork(studentSessionId, content, timeElapsed);
+        // Update local state to show waiting
+        if (currentStudentId) {
+          submitWork(currentStudentId, actualTaskId, content, null, timeElapsed);
+        }
+      } catch (error) {
+        console.error('Failed to submit work:', error);
+      }
+    } else if (currentStudentId && actualTaskId) {
+      // Demo mode - use local store
       submitWork(currentStudentId, actualTaskId, content, feedback, timeElapsed);
     }
   };
@@ -158,6 +232,7 @@ function App() {
     if (teacher) {
       sessionStorage.removeItem('lara-demo-mode'); // Clear demo mode when logging in
       setCurrentTeacher(teacher);
+      setIsDemoMode(false);
       setCurrentView('teacher_dashboard');
     }
   };
@@ -166,6 +241,7 @@ function App() {
     logOut();
     sessionStorage.removeItem('lara-demo-mode');
     setCurrentTeacher(null);
+    setIsDemoMode(false);
     setCurrentView('landing');
   };
 
@@ -217,6 +293,7 @@ function App() {
                     <button
                         onClick={() => {
                           sessionStorage.setItem('lara-demo-mode', 'active');
+                          setIsDemoMode(true);
                           setCurrentView('teacher_dashboard');
                         }}
                         className="w-full group relative flex items-center p-4 rounded-xl border border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50/30 transition-all duration-200"
@@ -343,23 +420,38 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const urlTaskCode = params.get('taskCode');
 
-    // Find the task - prioritize: global task lookup > studentTaskId > currentTaskId > first task
+    // Find the task - prioritize: backend task > global task lookup > studentTaskId > currentTaskId > first task
     let currentTask: typeof state.tasks[0] | undefined;
 
-    // FIRST: Try to get task from global mapping (this works without teacher context)
-    if (urlTaskCode) {
+    // FIRST: Use task from backend join response if available
+    if (studentTask) {
+      currentTask = {
+        id: studentTask.id,
+        title: studentTask.title,
+        prompt: studentTask.prompt,
+        successCriteria: studentTask.successCriteria,
+        universalExpectations: true,
+        status: 'active' as const,
+        folderId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+
+    // SECOND: Try to get task from global mapping (this works without teacher context)
+    if (!currentTask && urlTaskCode) {
       const taskFromGlobal = getTaskFromCode(urlTaskCode);
       if (taskFromGlobal) {
         currentTask = taskFromGlobal;
       }
     }
 
-    // SECOND: Try to use the studentTaskId (set when student joined or from submission)
+    // THIRD: Try to use the studentTaskId (set when student joined or from submission)
     if (!currentTask && studentTaskId) {
       currentTask = state.tasks.find(t => t.id === studentTaskId);
     }
 
-    // THIRD: Fallback to first task if nothing else works (demo mode)
+    // FOURTH: Fallback to first task if nothing else works (demo mode)
     if (!currentTask) {
       currentTask = state.tasks[0];
     }

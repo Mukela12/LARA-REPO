@@ -22,14 +22,16 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
 
     try {
       const result = isSignUp
-        ? signUp(email, password, name)
-        : logIn(email, password);
+        ? await signUp(email, password, name)
+        : await logIn(email, password);
 
       if (result.success) {
         onLoginSuccess();
       } else {
         setError(result.error || 'An error occurred');
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +162,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
 
         {/* Footer Note */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          Demo version - data stored locally in your browser
+          Powered by LARA Backend
         </p>
       </div>
     </div>

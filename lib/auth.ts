@@ -1,48 +1,26 @@
 // Teacher Authentication Utilities
-// Handles teacher login, signup, and session management using localStorage
+// Uses backend API for authentication with JWT tokens
 
-import { v4 as uuidv4 } from 'uuid';
+import { authApi, setToken, clearToken, getToken } from './api';
 
 export interface Teacher {
   id: string;
   email: string;
   name: string;
-  createdAt: string;
+  tier?: string;
+  aiCallsUsed?: number;
+  aiCallsLimit?: number;
+  aiCallsRemaining?: number;
 }
 
-interface TeacherCredentials {
-  email: string;
-  passwordHash: string;
-  teacher: Teacher;
-}
-
-const TEACHERS_STORAGE_KEY = 'lara-teachers';
 const CURRENT_TEACHER_KEY = 'lara-current-teacher';
 
-// Simple hash function (for demo purposes - in production use proper hashing)
-function simpleHash(password: string): string {
-  let hash = 0;
-  for (let i = 0; i < password.length; i++) {
-    const char = password.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return hash.toString(36);
-}
-
-// Get all registered teachers
-function getAllTeachers(): Record<string, TeacherCredentials> {
-  const stored = localStorage.getItem(TEACHERS_STORAGE_KEY);
-  return stored ? JSON.parse(stored) : {};
-}
-
-// Save teachers to localStorage
-function saveTeachers(teachers: Record<string, TeacherCredentials>): void {
-  localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(teachers));
-}
-
 // Sign up a new teacher
-export function signUp(email: string, password: string, name: string): { success: boolean; teacher?: Teacher; error?: string } {
+export async function signUp(
+  email: string,
+  password: string,
+  name: string
+): Promise<{ success: boolean; teacher?: Teacher; error?: string }> {
   if (!email || !password || !name) {
     return { success: false, error: 'All fields are required' };
   }
@@ -51,55 +29,50 @@ export function signUp(email: string, password: string, name: string): { success
     return { success: false, error: 'Password must be at least 6 characters' };
   }
 
-  const teachers = getAllTeachers();
-
-  if (teachers[email]) {
-    return { success: false, error: 'Email already registered' };
+  try {
+    const response = await authApi.register(email, password, name);
+    setToken(response.token);
+    const teacher: Teacher = {
+      id: response.teacher.id,
+      email: response.teacher.email,
+      name: response.teacher.name,
+      tier: response.teacher.tier,
+    };
+    setCurrentTeacher(teacher);
+    return { success: true, teacher };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Registration failed' };
   }
-
-  const teacher: Teacher = {
-    id: uuidv4(),
-    email,
-    name,
-    createdAt: new Date().toISOString(),
-  };
-
-  teachers[email] = {
-    email,
-    passwordHash: simpleHash(password),
-    teacher,
-  };
-
-  saveTeachers(teachers);
-  setCurrentTeacher(teacher);
-
-  return { success: true, teacher };
 }
 
 // Log in an existing teacher
-export function logIn(email: string, password: string): { success: boolean; teacher?: Teacher; error?: string } {
+export async function logIn(
+  email: string,
+  password: string
+): Promise<{ success: boolean; teacher?: Teacher; error?: string }> {
   if (!email || !password) {
     return { success: false, error: 'Email and password are required' };
   }
 
-  const teachers = getAllTeachers();
-  const credentials = teachers[email];
-
-  if (!credentials) {
-    return { success: false, error: 'Invalid email or password' };
+  try {
+    const response = await authApi.login(email, password);
+    setToken(response.token);
+    const teacher: Teacher = {
+      id: response.teacher.id,
+      email: response.teacher.email,
+      name: response.teacher.name,
+      tier: response.teacher.tier,
+    };
+    setCurrentTeacher(teacher);
+    return { success: true, teacher };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Login failed' };
   }
-
-  const passwordHash = simpleHash(password);
-  if (credentials.passwordHash !== passwordHash) {
-    return { success: false, error: 'Invalid email or password' };
-  }
-
-  setCurrentTeacher(credentials.teacher);
-  return { success: true, teacher: credentials.teacher };
 }
 
 // Log out current teacher
 export function logOut(): void {
+  clearToken();
   localStorage.removeItem(CURRENT_TEACHER_KEY);
 }
 
@@ -111,39 +84,41 @@ export function setCurrentTeacher(teacher: Teacher): void {
 // Get current logged-in teacher
 export function getCurrentTeacher(): Teacher | null {
   const stored = localStorage.getItem(CURRENT_TEACHER_KEY);
-  return stored ? JSON.parse(stored) : null;
+  if (!stored) return null;
+
+  // Also check if token exists
+  const token = getToken();
+  if (!token) {
+    localStorage.removeItem(CURRENT_TEACHER_KEY);
+    return null;
+  }
+
+  return JSON.parse(stored);
 }
 
 // Check if a teacher is currently logged in
 export function isLoggedIn(): boolean {
-  return getCurrentTeacher() !== null;
+  return getCurrentTeacher() !== null && getToken() !== null;
 }
 
-// Update teacher profile
-export function updateTeacherProfile(updates: Partial<Omit<Teacher, 'id' | 'createdAt'>>): { success: boolean; teacher?: Teacher; error?: string } {
-  const currentTeacher = getCurrentTeacher();
-  if (!currentTeacher) {
-    return { success: false, error: 'Not logged in' };
+// Refresh teacher profile from backend
+export async function refreshTeacherProfile(): Promise<Teacher | null> {
+  try {
+    const response = await authApi.getProfile();
+    const teacher: Teacher = {
+      id: response.id,
+      email: response.email,
+      name: response.name,
+      tier: response.tier,
+      aiCallsUsed: response.aiCallsUsed,
+      aiCallsLimit: response.aiCallsLimit,
+      aiCallsRemaining: response.aiCallsRemaining,
+    };
+    setCurrentTeacher(teacher);
+    return teacher;
+  } catch (error) {
+    // Token might be expired
+    logOut();
+    return null;
   }
-
-  const teachers = getAllTeachers();
-  const credentials = teachers[currentTeacher.email];
-
-  if (!credentials) {
-    return { success: false, error: 'Teacher not found' };
-  }
-
-  const updatedTeacher = { ...credentials.teacher, ...updates };
-  credentials.teacher = updatedTeacher;
-
-  // If email changed, update the key
-  if (updates.email && updates.email !== currentTeacher.email) {
-    delete teachers[currentTeacher.email];
-    teachers[updates.email] = credentials;
-  }
-
-  saveTeachers(teachers);
-  setCurrentTeacher(updatedTeacher);
-
-  return { success: true, teacher: updatedTeacher };
 }

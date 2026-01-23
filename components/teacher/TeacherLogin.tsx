@@ -5,7 +5,7 @@ import { signUp, logIn } from '../../lib/auth';
 
 interface TeacherLoginProps {
   onLoginSuccess: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBack }) => {
@@ -398,15 +398,17 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
             </div>
 
             {/* Back Link */}
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <button
-                onClick={onBack}
-                className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-medium py-2 transition-colors focus:outline-none focus:underline"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to landing page
-              </button>
-            </div>
+            {onBack && (
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <button
+                  onClick={onBack}
+                  className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 text-sm font-medium py-2 transition-colors focus:outline-none focus:underline"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to landing page
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

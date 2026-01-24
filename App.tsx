@@ -158,18 +158,25 @@ function App() {
   }, []); // Empty deps - only run on mount
 
   // Polling effect to check for feedback approval with exponential backoff
+  // Only poll when waiting for feedback (status is ready_for_feedback or generating)
+  const studentStatus = currentStudentId ? getStudentStatus(currentStudentId) : null;
+  const submission = currentStudentId ? state.submissions[currentStudentId] : null;
+  const alreadyHasFeedback = !!(submission?.feedback);
+  const shouldPoll = currentView === 'student_flow' &&
+                     currentStudentId &&
+                     !alreadyHasFeedback &&
+                     (studentStatus === 'ready_for_feedback' || studentStatus === 'generating' || studentStatus === 'submitted' || !studentStatus);
+
   useEffect(() => {
-    if (currentView === 'student_flow' && currentStudentId) {
+    if (shouldPoll) {
       // Don't poll if we've hit max failures
       if (pollFailureCount >= maxPollFailures) {
         console.warn('Polling stopped after max failures');
         return;
       }
 
-      // Calculate polling interval with exponential backoff
-      const baseInterval = 2000; // 2 seconds
-      const backoffMultiplier = Math.pow(2, pollFailureCount);
-      const pollInterval = Math.min(baseInterval * backoffMultiplier, 30000); // Max 30 seconds
+      // Poll every 5 seconds while waiting for feedback
+      const pollInterval = 5000;
 
       const poll = async () => {
         // If using backend, poll for feedback
@@ -204,7 +211,7 @@ function App() {
       const interval = setInterval(poll, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [currentView, currentStudentId, studentSessionId, getStudentStatus, pollFailureCount]);
+  }, [shouldPoll, studentSessionId, pollFailureCount]);
 
   // Polling effect for teacher dashboard - refresh session data every 2 seconds for real-time updates
   useEffect(() => {

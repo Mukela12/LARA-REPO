@@ -16,7 +16,7 @@ import { useBackendStore } from './lib/useBackendStore';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
 import { getTaskFromCode } from './lib/taskCodes';
 import { authApi, setStudentToken, getStudentToken, sessionsApi } from './lib/api';
-import { useStudentSocket, FeedbackReadyPayload } from './lib/useSocket';
+import { useStudentSocket, useTeacherSocket, FeedbackReadyPayload } from './lib/useSocket';
 
 type ViewMode = 'teacher_login' | 'student_flow' | 'teacher_dashboard' | 'teacher_review' | 'student_revision';
 
@@ -111,6 +111,24 @@ function App() {
 
   // Use WebSocket for real-time feedback when student is waiting
   useStudentSocket(studentSessionId, currentStudentId, handleFeedbackReady);
+
+  // WebSocket callback for real-time student submission updates (teacher)
+  const handleStudentSubmitted = useCallback(() => {
+    // Refresh dashboard when a student submits
+    const task = state.tasks.find(t => t.id === state.currentTaskId);
+    if (task?.liveSessionId) {
+      loadSessionDashboard(task.liveSessionId);
+    }
+  }, [state.tasks, state.currentTaskId, loadSessionDashboard]);
+
+  // Get current session ID for teacher WebSocket
+  const currentSessionId = state.tasks.find(t => t.id === state.currentTaskId)?.liveSessionId || null;
+
+  // Use WebSocket for real-time teacher updates
+  useTeacherSocket(
+    currentView === 'teacher_dashboard' ? currentSessionId : null,
+    handleStudentSubmitted
+  );
 
   // Check for logged-in teacher on mount
   useEffect(() => {
@@ -247,7 +265,7 @@ function App() {
     }
   }, [shouldPoll, studentSessionId, pollFailureCount]);
 
-  // Polling effect for teacher dashboard - refresh session data every 2 seconds for real-time updates
+  // Polling effect for teacher dashboard - reduced to 10 seconds as WebSocket fallback
   useEffect(() => {
     if (currentView === 'teacher_dashboard' && currentTeacher && state.currentTaskId) {
       const task = state.tasks.find(t => t.id === state.currentTaskId);
@@ -255,10 +273,10 @@ function App() {
         // Initial load when task is selected
         loadSessionDashboard(task.liveSessionId);
 
-        // Poll every 2 seconds for near real-time updates
+        // Reduced polling as fallback (WebSocket handles real-time)
         const interval = setInterval(() => {
           loadSessionDashboard(task.liveSessionId!);
-        }, 2000);
+        }, 10000); // 10 seconds instead of 2
 
         return () => clearInterval(interval);
       }

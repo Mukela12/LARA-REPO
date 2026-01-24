@@ -206,7 +206,7 @@ function App() {
     }
   }, [currentView, currentStudentId, studentSessionId, getStudentStatus, pollFailureCount]);
 
-  // Polling effect for teacher dashboard - refresh session data every 5 seconds
+  // Polling effect for teacher dashboard - refresh session data every 2 seconds for real-time updates
   useEffect(() => {
     if (currentView === 'teacher_dashboard' && currentTeacher && state.currentTaskId) {
       const task = state.tasks.find(t => t.id === state.currentTaskId);
@@ -214,10 +214,10 @@ function App() {
         // Initial load when task is selected
         loadSessionDashboard(task.liveSessionId);
 
-        // Poll every 5 seconds for updates
+        // Poll every 2 seconds for near real-time updates
         const interval = setInterval(() => {
           loadSessionDashboard(task.liveSessionId!);
-        }, 5000);
+        }, 2000);
 
         return () => clearInterval(interval);
       }

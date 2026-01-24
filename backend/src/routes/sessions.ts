@@ -4,6 +4,7 @@ import redis, { sessionKeys, SESSION_TTL } from '../lib/redis';
 import { authenticateTeacher, authenticateStudent } from '../middleware/auth';
 import { generateFeedback, logAiUsage, checkTeacherQuota } from '../services/feedback';
 import { AuthenticatedRequest, StudentSessionData, StudentSubmission } from '../types';
+import { emitToStudent, emitToSessionTeacher } from '../lib/socket';
 
 const router = Router();
 
@@ -205,6 +206,13 @@ router.post('/:sessionId/submit', authenticateStudent, async (req: Authenticated
         const student = JSON.parse(studentData) as StudentSessionData;
         student.status = 'ready_for_feedback';
         await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
+
+        // Emit WebSocket event to notify teacher of new submission
+        emitToSessionTeacher(sessionId, 'student-submitted', {
+          studentId,
+          studentName: student.name,
+          timestamp: Date.now(),
+        });
       }
     }
 
@@ -501,7 +509,8 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
       });
     });
 
-    // Update Redis cache
+    // Update Redis cache and emit WebSocket event
+    let feedbackToEmit: any = null;
     if (redis) {
       const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
       if (submissionData) {
@@ -509,6 +518,7 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
         submission.feedbackStatus = 'released';
         if (submission.feedback) {
           submission.feedback.masteryAchieved = isMastered || submission.feedback.masteryAchieved;
+          feedbackToEmit = submission.feedback;
         }
         await redis.set(
           sessionKeys.submission(sessionId, studentId),
@@ -524,6 +534,16 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
         student.status = newStatus;
         await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
       }
+    }
+
+    // Emit WebSocket event to notify student that feedback is ready
+    if (feedbackToEmit) {
+      emitToStudent(studentId, 'feedback-ready', {
+        studentId,
+        feedback: feedbackToEmit,
+        masteryConfirmed: isMastered,
+        status: newStatus,
+      });
     }
 
     return res.json({ approved: true, releasedAt: Date.now() });

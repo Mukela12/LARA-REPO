@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 
@@ -8,6 +9,7 @@ import taskRoutes from './routes/tasks';
 import folderRoutes from './routes/folders';
 import sessionRoutes from './routes/sessions';
 import { validateDatabaseConnection, disconnectDatabase } from './lib/prisma';
+import { initializeSocket } from './lib/socket';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,10 +70,15 @@ async function startServer() {
     process.exit(1);
   }
 
-  const server = app.listen(Number(PORT), HOST, () => {
+  // Create HTTP server and initialize Socket.io
+  const httpServer = createServer(app);
+  initializeSocket(httpServer, allowedOrigins);
+
+  const server = httpServer.listen(Number(PORT), HOST, () => {
     console.log(`🚀 LARA Backend running on ${HOST}:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+    console.log(`   WebSocket: Enabled`);
   });
 
   // Graceful shutdown

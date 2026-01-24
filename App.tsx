@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FeedbackView } from './components/student/FeedbackView';
 import { StudentEntry } from './components/student/StudentEntry';
 import { StudentRevisionView } from './components/student/StudentRevisionView';
@@ -16,6 +16,7 @@ import { useBackendStore } from './lib/useBackendStore';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
 import { getTaskFromCode } from './lib/taskCodes';
 import { authApi, setStudentToken, getStudentToken, sessionsApi } from './lib/api';
+import { useStudentSocket, FeedbackReadyPayload } from './lib/useSocket';
 
 type ViewMode = 'teacher_login' | 'student_flow' | 'teacher_dashboard' | 'teacher_review' | 'student_revision';
 
@@ -79,6 +80,37 @@ function App() {
   // Polling backoff state
   const [pollFailureCount, setPollFailureCount] = useState(0);
   const maxPollFailures = 5; // Stop polling after 5 consecutive failures
+
+  // WebSocket state for tracking real-time updates
+  const [receivedFeedbackViaSocket, setReceivedFeedbackViaSocket] = useState(false);
+
+  // WebSocket callback for real-time feedback updates
+  const handleFeedbackReady = useCallback((payload: FeedbackReadyPayload) => {
+    if (payload.studentId === currentStudentId) {
+      // Mark that we received feedback via socket to stop polling
+      setReceivedFeedbackViaSocket(true);
+
+      // Update local state with feedback
+      const actualTaskId = studentTaskId || state.currentTaskId;
+      submitWork(
+        currentStudentId,
+        actualTaskId,
+        state.submissions[currentStudentId]?.content || '',
+        payload.feedback as FeedbackSession,
+        undefined
+      );
+
+      // Update status based on mastery
+      if (payload.masteryConfirmed) {
+        markAsCompleted(currentStudentId);
+      } else {
+        approveFeedback(currentStudentId, payload.masteryConfirmed);
+      }
+    }
+  }, [currentStudentId, studentTaskId, state.currentTaskId, state.submissions, submitWork, markAsCompleted, approveFeedback]);
+
+  // Use WebSocket for real-time feedback when student is waiting
+  useStudentSocket(studentSessionId, currentStudentId, handleFeedbackReady);
 
   // Check for logged-in teacher on mount
   useEffect(() => {
@@ -159,12 +191,14 @@ function App() {
 
   // Polling effect to check for feedback approval with exponential backoff
   // Only poll when waiting for feedback (status is ready_for_feedback or generating)
+  // WebSocket provides real-time updates, but polling is kept as fallback
   const studentStatus = currentStudentId ? getStudentStatus(currentStudentId) : null;
   const submission = currentStudentId ? state.submissions[currentStudentId] : null;
   const alreadyHasFeedback = !!(submission?.feedback);
   const shouldPoll = currentView === 'student_flow' &&
                      currentStudentId &&
                      !alreadyHasFeedback &&
+                     !receivedFeedbackViaSocket &&
                      (studentStatus === 'ready_for_feedback' || studentStatus === 'generating' || studentStatus === 'submitted' || !studentStatus);
 
   useEffect(() => {

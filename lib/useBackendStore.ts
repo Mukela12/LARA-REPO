@@ -14,6 +14,7 @@ export interface BackendState {
   selectedNextStep: NextStep | null;
   folders: Folder[];
   credits: TeacherCredits;
+  sessionFeedbacksGenerated: number;
   isLoading: boolean;
   error: string | null;
 }
@@ -60,6 +61,7 @@ export function useBackendStore(teacherId?: string) {
       remaining: 800,
       monthlyLimit: 800,
     },
+    sessionFeedbacksGenerated: 0,
     isLoading: true,
     error: null,
   });
@@ -153,6 +155,7 @@ export function useBackendStore(teacherId?: string) {
           remaining: dashboard.usage.remaining,
           monthlyLimit: dashboard.usage.limit,
         },
+        sessionFeedbacksGenerated: dashboard.sessionUsage?.feedbacksGenerated || 0,
       }));
 
       return dashboard;

@@ -311,6 +311,9 @@ export interface DashboardResponse {
     limit: number;
     remaining: number;
   };
+  sessionUsage: {
+    feedbacksGenerated: number;
+  };
 }
 
 export interface GenerateFeedbackResponse {

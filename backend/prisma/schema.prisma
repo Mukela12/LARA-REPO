@@ -97,6 +97,7 @@ model TaskSession {
   totalStudents Int     @default(0)
   submissions   Int     @default(0)
   feedbackSent  Int     @default(0)
+  feedbacksGenerated Int @default(0)  // Track feedbacks created in this session
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

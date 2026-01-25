@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Share2, Copy, Check, Link } from 'lucide-react';
+import { Share2, Copy, Check, Link, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { formatTaskCode } from '../../lib/taskCodes';
 
 interface ShareTaskCardProps {
@@ -111,13 +112,38 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
         </motion.button>
       </div>
 
-      {/* Helper Text */}
-      <p className={`text-sm ${isDisabled ? 'text-slate-400' : 'text-slate-600'}`}>
-        Students can join using this link or enter code: {' '}
-        <span className={`font-mono font-bold ${isDisabled ? 'text-slate-500' : 'text-slate-800'}`}>
-          {formattedCode}
-        </span>
-      </p>
+      {/* QR Code and Helper Text */}
+      <div className="flex items-start gap-4">
+        {/* QR Code */}
+        <div className={`flex-shrink-0 p-2 rounded-lg border ${
+          isDisabled
+            ? 'bg-slate-100 border-slate-200'
+            : 'bg-white border-slate-200'
+        }`}>
+          <QRCodeSVG
+            value={taskLink}
+            size={80}
+            level="M"
+            includeMargin={false}
+            bgColor="transparent"
+            fgColor={isDisabled ? '#94a3b8' : '#1e293b'}
+          />
+        </div>
+
+        {/* Helper Text */}
+        <div className="flex-1">
+          <p className={`text-sm ${isDisabled ? 'text-slate-400' : 'text-slate-600'}`}>
+            Students can scan the QR code, use the link, or enter code:{' '}
+            <span className={`font-mono font-bold ${isDisabled ? 'text-slate-500' : 'text-slate-800'}`}>
+              {formattedCode}
+            </span>
+          </p>
+          <p className={`text-xs mt-1 ${isDisabled ? 'text-slate-400' : 'text-slate-500'}`}>
+            <QrCode className="w-3 h-3 inline mr-1" />
+            Show QR code on projector for quick classroom access
+          </p>
+        </div>
+      </div>
 
       {/* Disabled Warning */}
       {isDisabled && (

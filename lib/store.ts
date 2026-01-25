@@ -28,9 +28,11 @@ export interface AppState {
   students: Student[];
   submissions: Record<string, Submission>;
   currentTaskId: string;
+  currentSessionId: string | null;
   selectedNextStep: NextStep | null;
   folders: Folder[];
   credits: TeacherCredits;
+  sessionFeedbacksGenerated: number;
 }
 
 // Get storage key for a teacher (or demo mode)
@@ -50,13 +52,15 @@ export function useAppStore(teacherId?: string) {
       students: [],
       submissions: {},
       currentTaskId: 'default-task',
+      currentSessionId: null,
       selectedNextStep: null,
       folders: [],
       credits: {
         used: 0,
         remaining: 800,
         monthlyLimit: 800
-      }
+      },
+      sessionFeedbacksGenerated: 0
     };
 
     try {
@@ -70,7 +74,10 @@ export function useAppStore(teacherId?: string) {
           // Ensure folders is always an array (for old data without folders)
           folders: parsed.folders || [],
           // Ensure credits is always present (for old data without credits)
-          credits: parsed.credits || defaultState.credits
+          credits: parsed.credits || defaultState.credits,
+          // Ensure new fields have defaults
+          currentSessionId: parsed.currentSessionId || null,
+          sessionFeedbacksGenerated: parsed.sessionFeedbacksGenerated || 0
         };
       }
     } catch (e) {

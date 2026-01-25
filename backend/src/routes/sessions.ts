@@ -119,6 +119,9 @@ router.get('/:sessionId/dashboard', authenticateTeacher, async (req: Authenticat
       students,
       stats,
       usage: quota,
+      sessionUsage: {
+        feedbacksGenerated: session.feedbacksGenerated || 0,
+      },
       dataSource, // Indicate where data came from for debugging
     });
   } catch (error) {
@@ -414,6 +417,12 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
 
         // Log AI usage
         await logAiUsage(req.teacher!.id, 'single_feedback', 1, session.taskId, sessionId);
+
+        // Increment session feedbacks counter
+        await prisma.taskSession.update({
+          where: { id: sessionId },
+          data: { feedbacksGenerated: { increment: 1 } },
+        });
 
         results.push({ studentId, success: true });
       } catch (error) {

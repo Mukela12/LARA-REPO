@@ -427,6 +427,7 @@ function App() {
                 selectedTaskId={state.currentTaskId}
                 folders={state.folders}
                 credits={state.credits}
+                sessionFeedbacksGenerated={state.sessionFeedbacksGenerated}
                 onCreateTask={addTask}
                 onApproveFeedback={approveFeedback}
                 onNavigateToReview={handleNavigateToReview}

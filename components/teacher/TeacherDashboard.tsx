@@ -22,6 +22,7 @@ interface TeacherDashboardProps {
   activeTab: string;
   folders: Folder[];
   credits: TeacherCredits;
+  sessionFeedbacksGenerated?: number;
   onNavigate: (tab: string) => void;
   onCreateTask: (task: Task) => void;
   onApproveFeedback: (studentId: string) => void;
@@ -46,6 +47,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   activeTab,
   folders,
   credits,
+  sessionFeedbacksGenerated,
   onNavigate,
   onCreateTask,
   onApproveFeedback,
@@ -382,6 +384,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    {credits.used} used
                  </span>
              </div>
+             {sessionFeedbacksGenerated !== undefined && (
+               <div className="text-sm text-slate-600 mt-2">
+                 Feedbacks used this session: <span className="font-semibold">{sessionFeedbacksGenerated}</span>
+               </div>
+             )}
         </Card>
       </div>
 

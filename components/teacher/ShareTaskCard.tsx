@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Share2, Copy, Check, Link, QrCode } from 'lucide-react';
+import { Share2, Copy, Check, Link, QrCode, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { formatTaskCode } from '../../lib/taskCodes';
 
@@ -14,6 +14,7 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
   isDisabled = false,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   const baseUrl = import.meta.env.VITE_BASE_URL || window.location.origin;
   const taskLink = `${baseUrl}?taskCode=${taskCode}`;
@@ -114,12 +115,18 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
 
       {/* QR Code and Helper Text */}
       <div className="flex items-start gap-4">
-        {/* QR Code */}
-        <div className={`flex-shrink-0 p-2 rounded-lg border ${
-          isDisabled
-            ? 'bg-slate-100 border-slate-200'
-            : 'bg-white border-slate-200'
-        }`}>
+        {/* QR Code - Clickable */}
+        <motion.div
+          onClick={() => !isDisabled && setShowQRModal(true)}
+          whileHover={!isDisabled ? { scale: 1.05 } : {}}
+          whileTap={!isDisabled ? { scale: 0.98 } : {}}
+          className={`flex-shrink-0 p-2 rounded-lg border transition-shadow ${
+            isDisabled
+              ? 'bg-slate-100 border-slate-200'
+              : 'bg-white border-slate-200 cursor-pointer hover:shadow-md hover:border-brand-300'
+          }`}
+          title={!isDisabled ? "Click to enlarge QR code" : undefined}
+        >
           <QRCodeSVG
             value={taskLink}
             size={80}
@@ -128,7 +135,7 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
             bgColor="transparent"
             fgColor={isDisabled ? '#94a3b8' : '#1e293b'}
           />
-        </div>
+        </motion.div>
 
         {/* Helper Text */}
         <div className="flex-1">
@@ -151,6 +158,62 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
           This task is inactive. Activate it to share with students.
         </p>
       )}
+
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {showQRModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowQRModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-slate-900">Scan to Join</h3>
+                <button
+                  onClick={() => setShowQRModal(false)}
+                  className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+
+              {/* Large QR Code */}
+              <div className="flex justify-center mb-6">
+                <div className="p-4 bg-white rounded-xl border-2 border-slate-200">
+                  <QRCodeSVG
+                    value={taskLink}
+                    size={280}
+                    level="M"
+                    includeMargin={false}
+                    bgColor="transparent"
+                    fgColor="#1e293b"
+                  />
+                </div>
+              </div>
+
+              {/* Task Code */}
+              <div className="text-center">
+                <p className="text-sm text-slate-500 mb-1">Or enter code:</p>
+                <p className="text-2xl font-mono font-bold text-slate-900 tracking-wider">
+                  {formattedCode}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

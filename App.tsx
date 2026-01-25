@@ -638,9 +638,19 @@ function App() {
       revisionTask = getTaskFromCode(urlTaskCode) || undefined;
     }
 
-    // MVP1: Revisions saved but no AI feedback generated (deferred feature)
-    const handleRevisionSubmit = (content: string, timeElapsed: number) => {
+    // Submit revision to backend and update local state
+    const handleRevisionSubmit = async (content: string, timeElapsed: number) => {
       if (currentStudentId && revisionTask) {
+        // Call backend API to persist the revision
+        if (studentSessionId && getStudentToken()) {
+          try {
+            await sessionsApi.submitWork(studentSessionId, content, timeElapsed);
+          } catch (error) {
+            console.error('Failed to submit revision:', error);
+            // Could add error handling UI here
+          }
+        }
+        // Update local state
         submitRevision(currentStudentId, revisionTask.id, content, timeElapsed);
         setSelectedNextStep(null);
         setCurrentView('student_flow');

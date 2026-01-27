@@ -47,7 +47,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <span className="font-bold text-lg text-slate-900">LARA</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onExit} className="text-xs">
-            Exit Demo
+            Logout
           </Button>
         </header>
 

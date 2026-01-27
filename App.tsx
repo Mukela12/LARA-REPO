@@ -409,6 +409,9 @@ function App() {
         setStudentTaskId(response.task.id);
         setStudentTask(response.task);
 
+        // Add student to local state so getStudentStatus() works correctly
+        restoreStudent(response.studentId, name, 'active');
+
         // Update URL with student ID
         const url = new URL(window.location.href);
         url.searchParams.set('studentId', response.studentId);

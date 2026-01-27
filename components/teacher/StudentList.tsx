@@ -28,9 +28,9 @@ export const StudentList: React.FC<StudentListProps> = ({ students }) => {
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-        <h3 className="font-semibold text-slate-900">Student Progress</h3>
+        <h3 className="font-semibold text-slate-900">Learner Progress</h3>
         <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-          {students.length} Students
+          {students.length} Learners
         </span>
       </div>
 
@@ -39,7 +39,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students }) => {
         <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
                 <tr>
-                    <th className="px-6 py-3">Student Name</th>
+                    <th className="px-6 py-3">Learner Name</th>
                     <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3">Last Action</th>
                     <th className="px-6 py-3 text-right">Actions</th>

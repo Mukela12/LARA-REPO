@@ -31,6 +31,20 @@ export function clearStudentToken(): void {
   sessionStorage.removeItem(STUDENT_TOKEN_KEY);
 }
 
+export async function validateToken(): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Generic fetch wrapper with auth
 async function apiFetch<T>(
   endpoint: string,
@@ -54,6 +68,9 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && !useStudentToken) {
+      clearToken();  // Clear invalid teacher token
+    }
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(error.error || `HTTP ${response.status}`);
   }
@@ -117,6 +134,11 @@ export interface StudentRestoreResponse {
   };
 }
 
+export interface ValidateCodeResponse {
+  valid: boolean;
+  taskTitle: string;
+}
+
 export const authApi = {
   register: (email: string, password: string, name: string): Promise<AuthResponse> =>
     apiFetch('/api/auth/register', {
@@ -132,6 +154,12 @@ export const authApi = {
 
   getProfile: (): Promise<TeacherResponse> =>
     apiFetch('/api/auth/me'),
+
+  validateCode: (taskCode: string): Promise<ValidateCodeResponse> =>
+    apiFetch('/api/auth/validate-code', {
+      method: 'POST',
+      body: JSON.stringify({ taskCode }),
+    }),
 
   joinSession: (taskCode: string, studentName: string): Promise<StudentJoinResponse> =>
     apiFetch('/api/auth/session/join', {
@@ -293,6 +321,8 @@ export interface DashboardResponse {
     task: TaskResponse;
     startedAt: string | null;
     isLive: boolean;
+    dataPersisted: boolean;
+    dataExpiresAt: string | null;
   };
   students: StudentSessionData[];
   stats: {
@@ -363,6 +393,9 @@ export const sessionsApi = {
 
   getUsage: (): Promise<{ allowed: boolean; used: number; limit: number; remaining: number; resetDate?: string }> =>
     apiFetch('/api/sessions/usage'),
+
+  persistSession: (sessionId: string): Promise<{ persisted: boolean; studentCount?: number; message?: string }> =>
+    apiFetch(`/api/sessions/${sessionId}/persist`, { method: 'POST' }),
 };
 
 // Export API base URL for debugging

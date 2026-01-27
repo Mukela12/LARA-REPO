@@ -123,6 +123,7 @@ export function useBackendStore(teacherId?: string) {
         name: s.name,
         status: s.status as Student['status'],
         joinedAt: s.joinedAt,
+        taskId: dashboard.session.taskId,
       }));
 
       const submissions: Record<string, Submission> = {};
@@ -186,6 +187,28 @@ export function useBackendStore(teacherId?: string) {
       return newTask;
     } catch (error) {
       console.error('Failed to create task:', error);
+      throw error;
+    }
+  };
+
+  const updateTask = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      const response = await tasksApi.update(taskId, {
+        title: updates.title,
+        prompt: updates.prompt,
+        successCriteria: updates.successCriteria,
+        universalExpectations: updates.universalExpectations,
+      });
+
+      const updatedTask = taskResponseToTask(response);
+      setState(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(t => t.id === taskId ? updatedTask : t),
+      }));
+
+      return updatedTask;
+    } catch (error) {
+      console.error('Failed to update task:', error);
       throw error;
     }
   };
@@ -473,24 +496,30 @@ export function useBackendStore(teacherId?: string) {
   };
 
   const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
-    setState(prev => ({
-      ...prev,
-      students: prev.students.map(s =>
-        s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s
-      ),
-      submissions: {
-        ...prev.submissions,
-        [studentId]: {
-          studentId,
-          taskId,
-          content,
-          feedback,
-          timestamp: Date.now(),
-          timeElapsed,
-          revisionCount: 0,
+    setState(prev => {
+      const existingSubmission = prev.submissions[studentId];
+      // Preserve existing content if new content is empty (e.g., when adding feedback)
+      const finalContent = content || existingSubmission?.content || '';
+
+      return {
+        ...prev,
+        students: prev.students.map(s =>
+          s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s
+        ),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            studentId,
+            taskId,
+            content: finalContent,
+            feedback,
+            timestamp: Date.now(),
+            timeElapsed: timeElapsed ?? existingSubmission?.timeElapsed,
+            revisionCount: existingSubmission?.revisionCount || 0,
+          },
         },
-      },
-    }));
+      };
+    });
   };
 
   const saveSelectedNextStep = (studentId: string, step: NextStep) => {
@@ -551,9 +580,63 @@ export function useBackendStore(teacherId?: string) {
     }));
   };
 
+  // Update a task's liveSessionId (used when a student creates a new session)
+  const updateTaskLiveSessionId = (taskId: string, sessionId: string) => {
+    setState(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(t =>
+        t.id === taskId && !t.liveSessionId
+          ? { ...t, liveSessionId: sessionId }
+          : t
+      ),
+    }));
+  };
+
+  // Add student directly from WebSocket payload (optimistic update for instant UI)
+  const addStudentFromWebSocket = useCallback((student: {
+    id: string;
+    name: string;
+    sessionId: string;
+    taskId: string;
+  }) => {
+    setState(prev => {
+      // Check if student already exists
+      if (prev.students.some(s => s.id === student.id)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        students: [...prev.students, {
+          id: student.id,
+          name: student.name,
+          status: 'active' as const,
+          joinedAt: Date.now(),
+          taskId: student.taskId,
+        }],
+      };
+    });
+  }, []);
+
+  // Update student status from WebSocket (for submissions - optimistic update)
+  const updateStudentFromWebSocket = useCallback((update: {
+    studentId: string;
+    status?: Student['status'];
+  }) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.map(s =>
+        s.id === update.studentId
+          ? { ...s, status: update.status || s.status }
+          : s
+      ),
+    }));
+  }, []);
+
   return {
     state,
     addTask,
+    updateTask,
     addStudent,
     restoreStudent,
     submitWork,
@@ -577,5 +660,8 @@ export function useBackendStore(teacherId?: string) {
     regenerateFeedback,
     loadSessionDashboard,
     loadData,
+    updateTaskLiveSessionId,
+    addStudentFromWebSocket,
+    updateStudentFromWebSocket,
   };
 }

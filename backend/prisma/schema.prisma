@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,70 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Teacher/User Management
 model Teacher {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  name          String
-  passwordHash  String?  // Proper password storage (migrated from schoolId)
-  schoolId      String?  // Deprecated: was used for password, now for actual school ID
-
-  // Tier & Usage
-  tier          String   @default("starter")
-  aiCallsUsed   Int      @default(0)
-  aiCallsReset  DateTime @default(now()) // Monthly reset date
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  tasks         Task[]
-  folders       Folder[]
-  sessions      TaskSession[]
-  usageLogs     AiUsageLog[]
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String
+  schoolId     String?
+  tier         String        @default("starter")
+  aiCallsUsed  Int           @default(0)
+  aiCallsReset DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  passwordHash String?
+  usageLogs    AiUsageLog[]
+  folders      Folder[]
+  tasks        Task[]
+  sessions     TaskSession[]
 
   @@index([email])
 }
 
-// Folder Organization
 model Folder {
   id          String   @id @default(uuid())
   teacherId   String
   name        String
-  description String?  @db.Text
+  description String?
   color       String   @default("#3b82f6")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  // Relations
   teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   tasks       Task[]
 
   @@index([teacherId])
 }
 
-// Task Management
 model Task {
-  id                    String   @id @default(uuid())
+  id                    String        @id @default(uuid())
   teacherId             String
   title                 String
-  prompt                String   @db.Text
-  taskCode              String   @unique // 6-digit alphanumeric (e.g., "ABC-123")
-
-  // Configuration
-  universalExpectations Boolean  @default(true)
-  successCriteria       String[] // Array of criteria strings
-
-  // Task Management
-  status                String   @default("active") // "active" | "inactive"
+  prompt                String
+  taskCode              String        @unique
+  universalExpectations Boolean       @default(true)
+  successCriteria       String[]
+  status                String        @default("active")
   folderId              String?
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  // Relations
-  teacher               Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  folder                Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  folder                Folder?       @relation(fields: [folderId], references: [id])
+  teacher               Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   sessions              TaskSession[]
 
   @@index([teacherId])
@@ -82,134 +62,94 @@ model Task {
   @@index([taskCode])
 }
 
-// Task Session (Persistent Metadata - Live Data in Redis)
 model TaskSession {
-  id          String    @id @default(uuid())
-  taskId      String
-  teacherId   String
-
-  // Session State
-  isLive      Boolean   @default(false)
-  startedAt   DateTime?
-  endedAt     DateTime?
-
-  // Aggregated Metrics (updated periodically)
-  totalStudents Int     @default(0)
-  submissions   Int     @default(0)
-  feedbackSent  Int     @default(0)
-  feedbacksGenerated Int @default(0)  // Track feedbacks created in this session
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  students    Student[]
+  id                 String              @id @default(uuid())
+  taskId             String
+  teacherId          String
+  isLive             Boolean             @default(false)
+  startedAt          DateTime?
+  endedAt            DateTime?
+  dataPersisted      Boolean             @default(false)
+  dataExpiresAt      DateTime?
+  totalStudents      Int                 @default(0)
+  submissions        Int                 @default(0)
+  feedbackSent       Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  feedbacksGenerated Int                 @default(0)
+  students           Student[]
   studentSubmissions StudentSubmission[]
+  task               Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  teacher            Teacher             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@index([teacherId])
   @@index([isLive])
 }
 
-// Student (persisted for data durability)
 model Student {
-  id          String    @id @default(uuid())
+  id          String              @id @default(uuid())
   sessionId   String
   name        String
-
-  // Status tracking
-  status      String    @default("active") // active, ready_for_feedback, generating, submitted, feedback_ready, revising, completed
-
-  joinedAt    DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  session     TaskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status      String              @default("active")
+  joinedAt    DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  session     TaskSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   submissions StudentSubmission[]
 
   @@index([sessionId])
   @@index([status])
 }
 
-// Student Submission (persisted for data durability)
 model StudentSubmission {
-  id              String    @id @default(uuid())
-  studentId       String
-  sessionId       String
-
-  // Submission content
-  content         String    @db.Text
-  previousContent String?   @db.Text
-
-  // Metadata
-  timeElapsed     Int?      // seconds
-  revisionCount   Int       @default(0)
-  isRevision      Boolean   @default(false)
-
-  // Feedback status
-  feedbackStatus  String    @default("pending") // pending, generated, approved, released
+  id                 String              @id @default(uuid())
+  studentId          String
+  sessionId          String
+  content            String
+  previousContent    String?
+  timeElapsed        Int?
+  revisionCount      Int                 @default(0)
+  isRevision         Boolean             @default(false)
+  feedbackStatus     String              @default("pending")
   validationWarnings String[]
-
-  // Selected next step (if student chose one)
   selectedNextStepId String?
-
-  timestamp       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Relations
-  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  session         TaskSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  feedback        SubmissionFeedback?
+  timestamp          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  session            TaskSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feedback           SubmissionFeedback?
 
   @@index([studentId])
   @@index([sessionId])
   @@index([feedbackStatus])
 }
 
-// Submission Feedback (AI-generated feedback persisted)
 model SubmissionFeedback {
-  id              String    @id @default(uuid())
-  submissionId    String    @unique
-
-  // Feedback content (stored as JSON)
-  goal            String    @db.Text
-  masteryAchieved Boolean   @default(false)
-
-  // Structured feedback stored as JSON
-  strengths       Json      // Array of FeedbackItem
-  growthAreas     Json      // Array of FeedbackItem
-  nextSteps       Json      // Array of NextStep
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Relations
+  id              String            @id @default(uuid())
+  submissionId    String            @unique
+  goal            String
+  masteryAchieved Boolean           @default(false)
+  strengths       Json
+  growthAreas     Json
+  nextSteps       Json
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   submission      StudentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 }
 
-// AI Usage Log (Audit Trail)
 model AiUsageLog {
-  id            String   @id @default(uuid())
-  teacherId     String
-  taskId        String?
-  sessionId     String?
-
-  // Usage Details
-  operation     String   // "single_feedback" | "batch_feedback" | "regenerate"
-  studentCount  Int      @default(1)
-  tokensUsed    Int?
-  model         String   // "claude-haiku-4-5-20251001"
-
-  // Validation Results
-  validationWarnings String[] // Array of warning codes
-  hardBlockReason    String?  // If blocked, why
-
-  createdAt     DateTime @default(now())
-
-  // Relations
-  teacher       Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(uuid())
+  teacherId          String
+  taskId             String?
+  sessionId          String?
+  operation          String
+  studentCount       Int      @default(1)
+  tokensUsed         Int?
+  model              String
+  validationWarnings String[]
+  hardBlockReason    String?
+  createdAt          DateTime @default(now())
+  teacher            Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([teacherId])
   @@index([createdAt])

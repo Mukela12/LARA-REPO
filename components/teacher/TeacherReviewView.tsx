@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Award, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { Student, Submission, FeedbackSession, Task } from '../../types';
 import { FeedbackEditForm } from './FeedbackEditForm';
 import { FeedbackWarnings } from './FeedbackWarnings';
@@ -103,114 +103,107 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
     );
   };
 
-  const isRevision = submission.isRevision || (submission.revisionCount && submission.revisionCount > 0);
+  const isRevision = submission.revisionCount > 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header with Back Button */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onBack}
-                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-bold text-slate-900">Review Feedback</h1>
-                  {isRevision && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-100 text-purple-700 border border-purple-200 rounded-full text-sm font-semibold">
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      Revision #{submission.revisionCount}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
-                  <span>Student: {student.name}</span>
-                  {submission.timeElapsed && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      Time spent: {formatTime(submission.timeElapsed)}
-                    </span>
-                  )}
-                </div>
-              </div>
+      {/* Header - Redesigned with 3-row layout */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Row 1: Navigation + Title */}
+          <div className="flex items-center gap-4 py-4 border-b border-slate-100">
+            <button
+              onClick={onBack}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-semibold text-slate-900">Review Feedback</h1>
+          </div>
+
+          {/* Row 2: Student Info Bar */}
+          <div className="flex items-center justify-between py-3">
+            {/* Left: Student identity */}
+            <div className="flex items-center gap-3">
+              <span className="text-base font-medium text-slate-900">{student.name}</span>
+              {isRevision && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-purple-100 text-purple-700 border border-purple-200 rounded-full text-xs font-semibold">
+                  Revision #{submission.revisionCount}
+                </span>
+              )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3">
-              {/* Mastery Toggle */}
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={markAsMastered}
-                    onChange={(e) => setMarkAsMastered(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <Award className={`w-4 h-4 ${markAsMastered ? 'text-emerald-600' : 'text-slate-400'}`} />
-                  <span className={`text-sm font-medium ${markAsMastered ? 'text-emerald-700' : 'text-slate-600'}`}>
-                    Mark as Mastered
-                  </span>
-                </div>
-                {aiSuggestsMastery && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
-                    <Sparkles className="w-3 h-3" />
-                    AI Suggested
-                  </span>
-                )}
+            {/* Right: Metadata */}
+            {submission.timeElapsed && (
+              <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Clock className="w-4 h-4" />
+                <span>{formatTime(submission.timeElapsed)}</span>
               </div>
+            )}
+          </div>
 
+          {/* Row 3: Actions */}
+          <div className="flex items-center justify-between py-3 border-t border-slate-100">
+            {/* Left: Secondary Actions */}
+            <div className="flex items-center gap-2">
               <Button
-                variant="outline"
-                size="md"
+                variant="ghost"
+                size="sm"
                 onClick={handleRegenerate}
                 disabled={isRegenerating}
-                className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                className="text-slate-600"
               >
                 {isRegenerating ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
                     Regenerating...
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Regenerate (1 credit)
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                    Regenerate
                   </>
                 )}
               </Button>
               <Button
-                variant="outline"
-                size="md"
+                variant="ghost"
+                size="sm"
                 onClick={() => setIsEditing(true)}
+                className="text-slate-600"
               >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit Feedback
+                <Edit2 className="w-4 h-4 mr-1.5" />
+                Edit
               </Button>
+              <span className="text-xs text-slate-400 ml-1">1 credit</span>
+            </div>
+
+            {/* Right: Primary Actions */}
+            <div className="flex items-center gap-3">
+              {/* Simplified Mastery Toggle */}
+              <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={markAsMastered}
+                  onChange={(e) => setMarkAsMastered(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className={`text-sm font-medium ${markAsMastered ? 'text-emerald-700' : 'text-slate-600'}`}>
+                  Mastered
+                </span>
+                {aiSuggestsMastery && (
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" title="AI Suggested" />
+                )}
+              </label>
+
+              {/* Primary Approve Button */}
               <Button
                 variant="primary"
                 size="md"
                 onClick={() => onApprove(student.id, markAsMastered)}
                 className={markAsMastered ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
               >
-                {markAsMastered ? (
-                  <>
-                    <Award className="w-4 h-4 mr-2" />
-                    Approve as Mastered
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Approve & Send
-                  </>
-                )}
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Approve & Send
               </Button>
             </div>
           </div>

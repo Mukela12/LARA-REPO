@@ -2,9 +2,10 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../lib/prisma';
-import redis, { sessionKeys, SESSION_TTL } from '../lib/redis';
+import { requireRedis, sessionKeys, SESSION_TTL } from '../lib/redis';
 import { generateTeacherToken, generateStudentToken, authenticateTeacher } from '../middleware/auth';
 import { AuthenticatedRequest, StudentSessionData } from '../types';
+import { emitToSessionTeacher, emitToTeacher } from '../lib/socket';
 
 const router = Router();
 
@@ -138,6 +139,40 @@ router.get('/me', authenticateTeacher, async (req: AuthenticatedRequest, res: Re
   }
 });
 
+// Validate task code without revealing task details (Kahoot-style)
+router.post('/validate-code', async (req, res: Response) => {
+  try {
+    const { taskCode } = req.body;
+
+    if (!taskCode) {
+      return res.status(400).json({ error: 'Task code is required' });
+    }
+
+    // Find the task by code
+    const task = await prisma.task.findUnique({
+      where: { taskCode: taskCode.toUpperCase().replace('-', '') },
+      select: { id: true, title: true, status: true },
+    });
+
+    if (!task) {
+      return res.status(404).json({ error: 'Invalid code. Please check and try again.' });
+    }
+
+    if (task.status !== 'active') {
+      return res.status(403).json({ error: 'This task is not currently active.' });
+    }
+
+    // Return minimal info - just that the code is valid and the task title
+    return res.json({
+      valid: true,
+      taskTitle: task.title,
+    });
+  } catch (error) {
+    console.error('Validate code error:', error);
+    return res.status(500).json({ error: 'Failed to validate code' });
+  }
+});
+
 // Student joins via task code
 router.post('/session/join', async (req, res: Response) => {
   try {
@@ -177,6 +212,7 @@ router.post('/session/join', async (req, res: Response) => {
           teacherId: task.teacherId,
           isLive: true,
           startedAt: new Date(),
+          dataExpiresAt: new Date(Date.now() + SESSION_TTL * 1000), // 16 hours from now
         },
       });
     }
@@ -184,10 +220,33 @@ router.post('/session/join', async (req, res: Response) => {
     // Create student ID
     const studentId = uuidv4();
 
-    // Dual-write: Persist student to Postgres (source of truth) and Redis (real-time cache)
-    await prisma.$transaction(async (tx) => {
-      // Create student in Postgres for durability
-      await tx.student.create({
+    // Require Redis for live session operations (Redis is the source of truth for student data)
+    const redisClient = requireRedis();
+
+    // Write student to Redis (source of truth for student data)
+    const studentData: StudentSessionData = {
+      id: studentId,
+      name: studentName,
+      joinedAt: Date.now(),
+      status: 'active',
+    };
+
+    await redisClient.hset(
+      sessionKeys.students(session.id),
+      studentId,
+      JSON.stringify(studentData)
+    );
+    await redisClient.expire(sessionKeys.students(session.id), SESSION_TTL);
+
+    // Update session counter in Postgres (analytics only)
+    await prisma.taskSession.update({
+      where: { id: session.id },
+      data: { totalStudents: { increment: 1 } },
+    });
+
+    // If session has persistence enabled, also write to Postgres
+    if (session.dataPersisted) {
+      await prisma.student.create({
         data: {
           id: studentId,
           sessionId: session.id,
@@ -195,30 +254,24 @@ router.post('/session/join', async (req, res: Response) => {
           status: 'active',
         },
       });
+    }
 
-      // Update session student count
-      await tx.taskSession.update({
-        where: { id: session.id },
-        data: { totalStudents: { increment: 1 } },
-      });
+    // Emit WebSocket event to notify teacher that a student joined (AFTER successful Redis write)
+    // Emit to session-specific room (for teachers already viewing this session)
+    emitToSessionTeacher(session.id, 'student-joined', {
+      studentId,
+      studentName,
+      timestamp: Date.now(),
     });
 
-    // Also store in Redis for real-time access (cache layer)
-    if (redis) {
-      const studentData: StudentSessionData = {
-        id: studentId,
-        name: studentName,
-        joinedAt: Date.now(),
-        status: 'active',
-      };
-
-      await redis.hset(
-        sessionKeys.students(session.id),
-        studentId,
-        JSON.stringify(studentData)
-      );
-      await redis.expire(sessionKeys.students(session.id), SESSION_TTL);
-    }
+    // Also emit to teacher's global notification room (for when teacher doesn't have liveSessionId yet)
+    emitToTeacher(task.teacherId, 'student-joined', {
+      sessionId: session.id,
+      taskId: task.id,
+      studentId,
+      studentName,
+      timestamp: Date.now(),
+    });
 
     // Generate student token
     const token = generateStudentToken(studentId, session.id);

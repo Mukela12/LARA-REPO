@@ -24,7 +24,20 @@ export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[
     // Teacher joins their sessions
     socket.on('teacher:join-room', ({ sessionId }) => {
       socket.join(`session:${sessionId}:teacher`);
-      console.log(`Teacher joined session ${sessionId}`);
+      console.log(`[Socket] Teacher joined room: session:${sessionId}:teacher`);
+    });
+
+    // Teacher joins their global notification room (receives events from ALL their sessions)
+    socket.on('teacher:join-global', ({ teacherId }) => {
+      socket.join(`teacher:${teacherId}`);
+      console.log(`[Socket] Teacher joined global room: teacher:${teacherId}`);
+    });
+
+    // Teacher leaves a session room (when switching tasks)
+    socket.on('teacher:leave-room', ({ sessionId }) => {
+      const room = `session:${sessionId}:teacher`;
+      socket.leave(room);
+      console.log(`[Socket] Teacher left room: ${room}`);
     });
 
     socket.on('disconnect', () => {
@@ -41,15 +54,24 @@ export function getIO(): Server | null {
 
 // Emit to specific student
 export function emitToStudent(studentId: string, event: string, data: any) {
+  console.log(`[Socket] Emitting '${event}' to student:${studentId}`, data);
   io?.to(`student:${studentId}`).emit(event, data);
 }
 
 // Emit to session teachers
 export function emitToSessionTeacher(sessionId: string, event: string, data: any) {
+  console.log(`[Socket] Emitting '${event}' to session:${sessionId}:teacher`, data);
   io?.to(`session:${sessionId}:teacher`).emit(event, data);
 }
 
 // Emit to entire session (all students)
 export function emitToSession(sessionId: string, event: string, data: any) {
+  console.log(`[Socket] Emitting '${event}' to session:${sessionId}`, data);
   io?.to(`session:${sessionId}`).emit(event, data);
+}
+
+// Emit to teacher's global notification room (for events across all their sessions)
+export function emitToTeacher(teacherId: string, event: string, data: any) {
+  console.log(`[Socket] Emitting '${event}' to teacher:${teacherId}`, data);
+  io?.to(`teacher:${teacherId}`).emit(event, data);
 }

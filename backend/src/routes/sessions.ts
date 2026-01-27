@@ -1,12 +1,21 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
-import redis, { sessionKeys, SESSION_TTL } from '../lib/redis';
+import { requireRedis, sessionKeys, SESSION_TTL } from '../lib/redis';
 import { authenticateTeacher, authenticateStudent } from '../middleware/auth';
 import { generateFeedback, logAiUsage, checkTeacherQuota } from '../services/feedback';
 import { AuthenticatedRequest, StudentSessionData, StudentSubmission } from '../types';
 import { emitToStudent, emitToSessionTeacher } from '../lib/socket';
 
 const router = Router();
+
+// Universal Learning Expectations - EDberg Education standard criteria
+const UNIVERSAL_LEARNING_EXPECTATIONS = [
+  "Clarity of response - Is the answer clear and easy to understand?",
+  "Use of evidence and/or examples - Does the response include relevant evidence or examples?",
+  "Reasoning and explanation - Is the thinking process explained?",
+  "Organisation - Is the response well-structured?",
+  "Language for audience and purpose - Is the language appropriate?"
+];
 
 // Get session dashboard (teacher)
 router.get('/:sessionId/dashboard', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
@@ -27,29 +36,26 @@ router.get('/:sessionId/dashboard', authenticateTeacher, async (req: Authenticat
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Try Redis first (real-time cache), fall back to Postgres (source of truth)
     let students: (StudentSessionData & { submission?: StudentSubmission })[] = [];
     let dataSource: 'redis' | 'postgres' = 'redis';
 
-    if (redis) {
-      const studentData = await redis.hgetall(sessionKeys.students(session.id));
+    // For live sessions: Redis is required (source of truth)
+    // For historical sessions: Fall back to Postgres
+    if (session.isLive) {
+      const redisClient = requireRedis();
+      const studentData = await redisClient.hgetall(sessionKeys.students(session.id));
 
-      if (Object.keys(studentData).length > 0) {
-        // Redis has data - use it for real-time view
-        for (const [studentId, data] of Object.entries(studentData)) {
-          const student = JSON.parse(data) as StudentSessionData;
+      for (const [studentId, data] of Object.entries(studentData)) {
+        const student = JSON.parse(data) as StudentSessionData;
 
-          // Get submission if exists
-          const submissionData = await redis.get(sessionKeys.submission(session.id, studentId));
-          const submission = submissionData ? JSON.parse(submissionData) as StudentSubmission : undefined;
+        // Get submission if exists
+        const submissionData = await redisClient.get(sessionKeys.submission(session.id, studentId));
+        const submission = submissionData ? JSON.parse(submissionData) as StudentSubmission : undefined;
 
-          students.push({ ...student, submission });
-        }
+        students.push({ ...student, submission });
       }
-    }
-
-    // Fall back to Postgres if Redis is unavailable or empty
-    if (students.length === 0) {
+    } else {
+      // Historical session - can use Postgres (for backwards compatibility with old data)
       dataSource = 'postgres';
       const pgStudents = await prisma.student.findMany({
         where: { sessionId: session.id },
@@ -115,6 +121,8 @@ router.get('/:sessionId/dashboard', authenticateTeacher, async (req: Authenticat
         task: session.task,
         startedAt: session.startedAt,
         isLive: session.isLive,
+        dataPersisted: session.dataPersisted,
+        dataExpiresAt: session.dataExpiresAt?.toISOString() || null,
       },
       students,
       stats,
@@ -145,79 +153,89 @@ router.post('/:sessionId/submit', authenticateStudent, async (req: Authenticated
       return res.status(403).json({ error: 'Session mismatch' });
     }
 
-    // Get existing submission for revision count (check Postgres first, then Redis)
-    const existingSubmission = await prisma.studentSubmission.findFirst({
-      where: { studentId, sessionId },
-      orderBy: { timestamp: 'desc' },
-    });
-    const revisionCount = existingSubmission ? existingSubmission.revisionCount + 1 : 0;
-
-    // Dual-write: Persist to Postgres (source of truth) and Redis (cache)
-    await prisma.$transaction(async (tx) => {
-      // Create submission in Postgres
-      await tx.studentSubmission.create({
-        data: {
-          studentId,
-          sessionId,
-          content,
-          previousContent: existingSubmission?.content,
-          timeElapsed,
-          revisionCount,
-          isRevision: revisionCount > 0,
-          feedbackStatus: 'pending',
-          validationWarnings: [],
-        },
-      });
-
-      // Update student status in Postgres
-      await tx.student.update({
-        where: { id: studentId },
-        data: { status: 'ready_for_feedback' },
-      });
-
-      // Update session submission count
-      await tx.taskSession.update({
-        where: { id: sessionId },
-        data: { submissions: { increment: 1 } },
-      });
+    // Get session to check persistence status
+    const session = await prisma.taskSession.findUnique({
+      where: { id: sessionId },
+      select: { dataPersisted: true },
     });
 
-    // Also update Redis cache for real-time access
-    if (redis) {
-      const submission: StudentSubmission = {
-        studentId,
-        content,
-        timestamp: Date.now(),
-        timeElapsed,
-        revisionCount,
-        previousContent: existingSubmission?.content,
-        feedbackStatus: 'pending',
-        validationWarnings: [],
-        isRevision: revisionCount > 0,
-      };
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
 
-      await redis.set(
-        sessionKeys.submission(sessionId, studentId),
-        JSON.stringify(submission),
-        'EX',
-        SESSION_TTL
-      );
+    // Get existing submission for revision count from Redis
+    const existingSubmissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
+    const existingSubmission = existingSubmissionData ? JSON.parse(existingSubmissionData) as StudentSubmission : null;
+    const revisionCount = existingSubmission ? (existingSubmission.revisionCount || 0) + 1 : 0;
 
-      // Update student status in Redis
-      const studentData = await redis.hget(sessionKeys.students(sessionId), studentId);
-      if (studentData) {
-        const student = JSON.parse(studentData) as StudentSessionData;
-        student.status = 'ready_for_feedback';
-        await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
-
-        // Emit WebSocket event to notify teacher of new submission
-        emitToSessionTeacher(sessionId, 'student-submitted', {
-          studentId,
-          studentName: student.name,
-          timestamp: Date.now(),
-        });
-      }
+    // Get student data from Redis
+    const studentData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
+    if (!studentData) {
+      return res.status(404).json({ error: 'Student not found in session' });
     }
+    const student = JSON.parse(studentData) as StudentSessionData;
+
+    // Write submission to Redis (source of truth)
+    const submission: StudentSubmission = {
+      studentId,
+      content,
+      timestamp: Date.now(),
+      timeElapsed,
+      revisionCount,
+      previousContent: existingSubmission?.content,
+      feedbackStatus: 'pending',
+      validationWarnings: [],
+      isRevision: revisionCount > 0,
+    };
+
+    await redisClient.set(
+      sessionKeys.submission(sessionId, studentId),
+      JSON.stringify(submission),
+      'EX',
+      SESSION_TTL
+    );
+
+    // Update student status in Redis
+    student.status = 'ready_for_feedback';
+    await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
+
+    // Update session submission count in Postgres (analytics only)
+    await prisma.taskSession.update({
+      where: { id: sessionId },
+      data: { submissions: { increment: 1 } },
+    });
+
+    // If session has persistence enabled, also write to Postgres
+    if (session?.dataPersisted) {
+      await prisma.$transaction(async (tx) => {
+        // Update student status
+        await tx.student.update({
+          where: { id: studentId },
+          data: { status: 'ready_for_feedback' },
+        });
+
+        // Create submission
+        await tx.studentSubmission.create({
+          data: {
+            studentId,
+            sessionId,
+            content,
+            previousContent: existingSubmission?.content,
+            timeElapsed,
+            revisionCount,
+            isRevision: revisionCount > 0,
+            feedbackStatus: 'pending',
+            validationWarnings: [],
+          },
+        });
+      });
+    }
+
+    // Emit WebSocket event to notify teacher of new submission (AFTER successful Redis write)
+    emitToSessionTeacher(sessionId, 'student-submitted', {
+      studentId,
+      studentName: student.name,
+      timestamp: Date.now(),
+    });
 
     return res.json({
       status: 'ready_for_feedback',
@@ -247,27 +265,19 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Get students to generate for - check both Redis and Postgres
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
+
+    // Get students to generate for from Redis
     let targetStudentIds: string[] = studentIds || [];
 
     if (targetStudentIds.length === 0) {
-      // Try Redis first, fall back to Postgres
-      if (redis) {
-        const allStudents = await redis.hgetall(sessionKeys.students(sessionId));
-        for (const [sid, data] of Object.entries(allStudents)) {
-          const student = JSON.parse(data) as StudentSessionData;
-          if (student.status === 'ready_for_feedback') {
-            targetStudentIds.push(sid);
-          }
+      const allStudents = await redisClient.hgetall(sessionKeys.students(sessionId));
+      for (const [sid, data] of Object.entries(allStudents)) {
+        const student = JSON.parse(data) as StudentSessionData;
+        if (student.status === 'ready_for_feedback') {
+          targetStudentIds.push(sid);
         }
-      }
-
-      // Fall back to Postgres if no Redis data
-      if (targetStudentIds.length === 0) {
-        const pgStudents = await prisma.student.findMany({
-          where: { sessionId, status: 'ready_for_feedback' },
-        });
-        targetStudentIds = pgStudents.map(s => s.id);
       }
     }
 
@@ -290,157 +300,115 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
 
     for (const studentId of targetStudentIds) {
       try {
-        // Update status to generating in both Postgres and Redis
-        await prisma.student.update({
-          where: { id: studentId },
-          data: { status: 'generating' },
-        });
-
-        if (redis) {
-          const studentData = await redis.hget(sessionKeys.students(sessionId), studentId);
-          if (studentData) {
-            const student = JSON.parse(studentData) as StudentSessionData;
-            student.status = 'generating';
-            await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
-          }
+        // Update status to generating in Redis
+        const studentData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
+        if (!studentData) {
+          results.push({ studentId, success: false, error: 'Student not found' });
+          continue;
         }
 
-        // Get submission content - try Redis first, then Postgres
-        let submissionContent: string | undefined;
-        let pgSubmissionId: string | undefined;
+        const student = JSON.parse(studentData) as StudentSessionData;
+        student.status = 'generating';
+        await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
 
-        if (redis) {
-          const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
-          if (submissionData) {
-            const submission = JSON.parse(submissionData) as StudentSubmission;
-            submissionContent = submission.content;
-          }
-        }
-
-        if (!submissionContent) {
-          // Fall back to Postgres
-          const pgSubmission = await prisma.studentSubmission.findFirst({
-            where: { studentId, sessionId },
-            orderBy: { timestamp: 'desc' },
-          });
-          if (pgSubmission) {
-            submissionContent = pgSubmission.content;
-            pgSubmissionId = pgSubmission.id;
-          }
-        }
-
-        if (!submissionContent) {
+        // Get submission content from Redis
+        const submissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
+        if (!submissionData) {
           results.push({ studentId, success: false, error: 'No submission found' });
           continue;
         }
 
+        const submission = JSON.parse(submissionData) as StudentSubmission;
+
+        // Determine which criteria to use - ULE or custom
+        const criteriaToUse = session.task.universalExpectations
+          ? UNIVERSAL_LEARNING_EXPECTATIONS
+          : (session.task.successCriteria as string[]);
+
         // Generate feedback using AI
         const feedback = await generateFeedback(
           session.task.prompt,
-          session.task.successCriteria as string[],
-          submissionContent
+          criteriaToUse,
+          submission.content
         );
 
-        // Persist feedback to Postgres
-        if (!pgSubmissionId) {
-          // Find the submission ID if we got content from Redis
-          const pgSubmission = await prisma.studentSubmission.findFirst({
-            where: { studentId, sessionId },
-            orderBy: { timestamp: 'desc' },
-          });
-          pgSubmissionId = pgSubmission?.id;
-        }
+        // Update submission with feedback in Redis
+        submission.feedback = feedback;
+        submission.feedbackStatus = 'generated';
+        await redisClient.set(
+          sessionKeys.submission(sessionId, studentId),
+          JSON.stringify(submission),
+          'EX',
+          SESSION_TTL
+        );
 
-        if (pgSubmissionId) {
-          await prisma.$transaction(async (tx) => {
-            // Update submission status
-            await tx.studentSubmission.update({
-              where: { id: pgSubmissionId },
-              data: { feedbackStatus: 'generated' },
-            });
+        // Update student status in Redis
+        student.status = 'submitted';
+        await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
 
-            // Create or update feedback record
-            // Cast arrays to JSON-compatible format for Prisma
-            const strengthsJson = JSON.parse(JSON.stringify(feedback.strengths));
-            const growthAreasJson = JSON.parse(JSON.stringify(feedback.growthAreas));
-            const nextStepsJson = JSON.parse(JSON.stringify(feedback.nextSteps));
-
-            await tx.submissionFeedback.upsert({
-              where: { submissionId: pgSubmissionId },
-              create: {
-                submissionId: pgSubmissionId!,
-                goal: feedback.goal,
-                masteryAchieved: feedback.masteryAchieved || false,
-                strengths: strengthsJson,
-                growthAreas: growthAreasJson,
-                nextSteps: nextStepsJson,
-              },
-              update: {
-                goal: feedback.goal,
-                masteryAchieved: feedback.masteryAchieved || false,
-                strengths: strengthsJson,
-                growthAreas: growthAreasJson,
-                nextSteps: nextStepsJson,
-              },
-            });
-
-            // Update student status
-            await tx.student.update({
-              where: { id: studentId },
-              data: { status: 'submitted' },
-            });
-          });
-        }
-
-        // Update Redis cache
-        if (redis) {
-          const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
-          if (submissionData) {
-            const submission = JSON.parse(submissionData) as StudentSubmission;
-            submission.feedback = feedback;
-            submission.feedbackStatus = 'generated';
-            await redis.set(
-              sessionKeys.submission(sessionId, studentId),
-              JSON.stringify(submission),
-              'EX',
-              SESSION_TTL
-            );
-          }
-
-          const studentData = await redis.hget(sessionKeys.students(sessionId), studentId);
-          if (studentData) {
-            const student = JSON.parse(studentData) as StudentSessionData;
-            student.status = 'submitted';
-            await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
-          }
-        }
-
-        // Log AI usage
+        // Log AI usage (Postgres - for analytics)
         await logAiUsage(req.teacher!.id, 'single_feedback', 1, session.taskId, sessionId);
 
-        // Increment session feedbacks counter
+        // Increment session feedbacks counter (Postgres - for analytics)
         await prisma.taskSession.update({
           where: { id: sessionId },
           data: { feedbacksGenerated: { increment: 1 } },
         });
 
+        // If session has persistence enabled, also write to Postgres
+        if (session.dataPersisted) {
+          const pgSubmission = await prisma.studentSubmission.findFirst({
+            where: { studentId, sessionId },
+            orderBy: { timestamp: 'desc' },
+          });
+
+          if (pgSubmission) {
+            await prisma.$transaction(async (tx) => {
+              // Update submission status
+              await tx.studentSubmission.update({
+                where: { id: pgSubmission.id },
+                data: { feedbackStatus: 'generated' },
+              });
+
+              // Create or update feedback record
+              await tx.submissionFeedback.upsert({
+                where: { submissionId: pgSubmission.id },
+                create: {
+                  submissionId: pgSubmission.id,
+                  goal: feedback.goal,
+                  masteryAchieved: feedback.masteryAchieved || false,
+                  strengths: JSON.parse(JSON.stringify(feedback.strengths)),
+                  growthAreas: JSON.parse(JSON.stringify(feedback.growthAreas)),
+                  nextSteps: JSON.parse(JSON.stringify(feedback.nextSteps)),
+                },
+                update: {
+                  goal: feedback.goal,
+                  masteryAchieved: feedback.masteryAchieved || false,
+                  strengths: JSON.parse(JSON.stringify(feedback.strengths)),
+                  growthAreas: JSON.parse(JSON.stringify(feedback.growthAreas)),
+                  nextSteps: JSON.parse(JSON.stringify(feedback.nextSteps)),
+                },
+              });
+
+              // Update student status
+              await tx.student.update({
+                where: { id: studentId },
+                data: { status: 'submitted' },
+              });
+            });
+          }
+        }
+
         results.push({ studentId, success: true });
       } catch (error) {
         console.error(`Failed to generate for ${studentId}:`, error);
 
-        // Revert status in both Postgres and Redis
-        await prisma.student.update({
-          where: { id: studentId },
-          data: { status: 'ready_for_feedback' },
-        }).catch(() => {}); // Ignore if student doesn't exist
-
-        if (redis) {
-          const revertData = await redis.hget(sessionKeys.students(sessionId), studentId);
-          if (revertData) {
-            const student = JSON.parse(revertData) as StudentSessionData;
-            student.status = 'ready_for_feedback';
-            await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
-          }
+        // Revert status in Redis
+        const revertData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
+        if (revertData) {
+          const student = JSON.parse(revertData) as StudentSessionData;
+          student.status = 'ready_for_feedback';
+          await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
         }
 
         results.push({ studentId, success: false, error: 'Generation failed' });
@@ -478,78 +446,81 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
       return res.status(404).json({ error: 'Session not found' });
     }
 
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
+
     const newStatus = isMastered ? 'completed' : 'feedback_ready';
 
-    // Update Postgres (source of truth)
-    await prisma.$transaction(async (tx) => {
-      // Get the latest submission
-      const pgSubmission = await tx.studentSubmission.findFirst({
+    // Update submission in Redis (source of truth)
+    const submissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
+    if (!submissionData) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const submission = JSON.parse(submissionData) as StudentSubmission;
+    submission.feedbackStatus = 'released';
+    if (submission.feedback) {
+      submission.feedback.masteryAchieved = isMastered || submission.feedback.masteryAchieved;
+    }
+    await redisClient.set(
+      sessionKeys.submission(sessionId, studentId),
+      JSON.stringify(submission),
+      'EX',
+      SESSION_TTL
+    );
+
+    // Update student status in Redis
+    const studentData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
+    if (studentData) {
+      const student = JSON.parse(studentData) as StudentSessionData;
+      student.status = newStatus;
+      await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
+    }
+
+    // Update session feedback count in Postgres (analytics only)
+    await prisma.taskSession.update({
+      where: { id: sessionId },
+      data: { feedbackSent: { increment: 1 } },
+    });
+
+    // If session has persistence enabled, also write to Postgres
+    if (session.dataPersisted) {
+      const pgSubmission = await prisma.studentSubmission.findFirst({
         where: { studentId, sessionId },
         orderBy: { timestamp: 'desc' },
         include: { feedback: true },
       });
 
       if (pgSubmission) {
-        // Update submission status
-        await tx.studentSubmission.update({
-          where: { id: pgSubmission.id },
-          data: { feedbackStatus: 'released' },
-        });
-
-        // Update feedback mastery if exists
-        if (pgSubmission.feedback) {
-          await tx.submissionFeedback.update({
-            where: { id: pgSubmission.feedback.id },
-            data: { masteryAchieved: isMastered || pgSubmission.feedback.masteryAchieved },
+        await prisma.$transaction(async (tx) => {
+          // Update submission status
+          await tx.studentSubmission.update({
+            where: { id: pgSubmission.id },
+            data: { feedbackStatus: 'released' },
           });
-        }
-      }
 
-      // Update student status
-      await tx.student.update({
-        where: { id: studentId },
-        data: { status: newStatus },
-      });
+          // Update feedback mastery if exists
+          if (pgSubmission.feedback) {
+            await tx.submissionFeedback.update({
+              where: { id: pgSubmission.feedback.id },
+              data: { masteryAchieved: isMastered || pgSubmission.feedback.masteryAchieved },
+            });
+          }
 
-      // Update session feedback count
-      await tx.taskSession.update({
-        where: { id: sessionId },
-        data: { feedbackSent: { increment: 1 } },
-      });
-    });
-
-    // Update Redis cache and emit WebSocket event
-    let feedbackToEmit: any = null;
-    if (redis) {
-      const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
-      if (submissionData) {
-        const submission = JSON.parse(submissionData) as StudentSubmission;
-        submission.feedbackStatus = 'released';
-        if (submission.feedback) {
-          submission.feedback.masteryAchieved = isMastered || submission.feedback.masteryAchieved;
-          feedbackToEmit = submission.feedback;
-        }
-        await redis.set(
-          sessionKeys.submission(sessionId, studentId),
-          JSON.stringify(submission),
-          'EX',
-          SESSION_TTL
-        );
-      }
-
-      const studentData = await redis.hget(sessionKeys.students(sessionId), studentId);
-      if (studentData) {
-        const student = JSON.parse(studentData) as StudentSessionData;
-        student.status = newStatus;
-        await redis.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
+          // Update student status
+          await tx.student.update({
+            where: { id: studentId },
+            data: { status: newStatus },
+          });
+        });
       }
     }
 
-    // Emit WebSocket event to notify student that feedback is ready
-    if (feedbackToEmit) {
+    // Emit WebSocket event to notify student that feedback is ready (AFTER successful Redis write)
+    if (submission.feedback) {
       emitToStudent(studentId, 'feedback-ready', {
         studentId,
-        feedback: feedbackToEmit,
+        feedback: submission.feedback,
         masteryConfirmed: isMastered,
         status: newStatus,
       });
@@ -580,18 +551,17 @@ router.patch('/:sessionId/feedback/:studentId/edit', authenticateTeacher, async 
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    if (!redis) {
-      return res.status(500).json({ error: 'Session storage unavailable' });
-    }
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
 
-    const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
+    const submissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
     if (!submissionData) {
       return res.status(404).json({ error: 'Submission not found' });
     }
 
     const submission = JSON.parse(submissionData) as StudentSubmission;
     submission.feedback = { ...submission.feedback, ...feedback };
-    await redis.set(
+    await redisClient.set(
       sessionKeys.submission(sessionId, studentId),
       JSON.stringify(submission),
       'EX',
@@ -615,12 +585,11 @@ router.get('/:sessionId/feedback/:studentId', authenticateStudent, async (req: A
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    if (!redis) {
-      return res.status(500).json({ error: 'Session storage unavailable' });
-    }
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
 
     // Get student status
-    const studentData = await redis.hget(sessionKeys.students(sessionId), studentId);
+    const studentData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
     if (!studentData) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -628,7 +597,7 @@ router.get('/:sessionId/feedback/:studentId', authenticateStudent, async (req: A
     const student = JSON.parse(studentData) as StudentSessionData;
 
     // Get submission
-    const submissionData = await redis.get(sessionKeys.submission(sessionId, studentId));
+    const submissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
     const submission = submissionData ? JSON.parse(submissionData) as StudentSubmission : null;
 
     // Only return feedback if it's been released
@@ -671,6 +640,134 @@ router.get('/usage', authenticateTeacher, async (req: AuthenticatedRequest, res:
   } catch (error) {
     console.error('Get usage error:', error);
     return res.status(500).json({ error: 'Failed to get usage' });
+  }
+});
+
+// Teacher persists session data from Redis to Postgres
+router.post('/:sessionId/persist', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+
+    const session = await prisma.taskSession.findFirst({
+      where: {
+        id: sessionId,
+        teacherId: req.teacher!.id,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!session.isLive) {
+      return res.status(400).json({ error: 'Session is not live' });
+    }
+
+    if (session.dataPersisted) {
+      return res.json({ persisted: true, message: 'Already saved' });
+    }
+
+    // Check if data has expired
+    if (session.dataExpiresAt && new Date() > session.dataExpiresAt) {
+      return res.status(400).json({ error: 'Session data has expired and cannot be saved' });
+    }
+
+    // Require Redis for reading live session data
+    const redisClient = requireRedis();
+    const studentData = await redisClient.hgetall(sessionKeys.students(sessionId));
+
+    if (Object.keys(studentData).length === 0) {
+      return res.status(400).json({ error: 'No student data to save' });
+    }
+
+    // Pre-fetch all submissions from Redis BEFORE transaction to avoid blocking
+    const submissionDataMap = new Map<string, StudentSubmission>();
+    for (const studentId of Object.keys(studentData)) {
+      const subData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
+      if (subData) {
+        submissionDataMap.set(studentId, JSON.parse(subData) as StudentSubmission);
+      }
+    }
+
+    // Transaction: copy all Redis data to Postgres (with increased timeout)
+    await prisma.$transaction(async (tx) => {
+      for (const [studentId, data] of Object.entries(studentData)) {
+        const student = JSON.parse(data) as StudentSessionData;
+
+        // Upsert student
+        await tx.student.upsert({
+          where: { id: studentId },
+          create: {
+            id: studentId,
+            sessionId,
+            name: student.name,
+            status: student.status,
+            joinedAt: new Date(student.joinedAt),
+          },
+          update: { status: student.status },
+        });
+
+        // Use pre-fetched submission data (no Redis call inside transaction)
+        const submission = submissionDataMap.get(studentId);
+        if (submission) {
+          const existingSub = await tx.studentSubmission.findFirst({
+            where: { studentId, sessionId },
+          });
+
+          const subRecord = existingSub
+            ? await tx.studentSubmission.update({
+                where: { id: existingSub.id },
+                data: { content: submission.content, feedbackStatus: submission.feedbackStatus },
+              })
+            : await tx.studentSubmission.create({
+                data: {
+                  studentId,
+                  sessionId,
+                  content: submission.content,
+                  previousContent: submission.previousContent,
+                  timeElapsed: submission.timeElapsed,
+                  revisionCount: submission.revisionCount || 0,
+                  isRevision: submission.isRevision || false,
+                  feedbackStatus: submission.feedbackStatus,
+                  validationWarnings: submission.validationWarnings || [],
+                },
+              });
+
+          // Persist feedback if exists
+          if (submission.feedback) {
+            await tx.submissionFeedback.upsert({
+              where: { submissionId: subRecord.id },
+              create: {
+                submissionId: subRecord.id,
+                goal: submission.feedback.goal,
+                masteryAchieved: submission.feedback.masteryAchieved || false,
+                strengths: JSON.parse(JSON.stringify(submission.feedback.strengths)),
+                growthAreas: JSON.parse(JSON.stringify(submission.feedback.growthAreas)),
+                nextSteps: JSON.parse(JSON.stringify(submission.feedback.nextSteps)),
+              },
+              update: {
+                goal: submission.feedback.goal,
+                masteryAchieved: submission.feedback.masteryAchieved || false,
+                strengths: JSON.parse(JSON.stringify(submission.feedback.strengths)),
+                growthAreas: JSON.parse(JSON.stringify(submission.feedback.growthAreas)),
+                nextSteps: JSON.parse(JSON.stringify(submission.feedback.nextSteps)),
+              },
+            });
+          }
+        }
+      }
+
+      // Mark session as persisted
+      await tx.taskSession.update({
+        where: { id: sessionId },
+        data: { dataPersisted: true },
+      });
+    }, { timeout: 15000 });
+
+    return res.json({ persisted: true, studentCount: Object.keys(studentData).length });
+  } catch (error) {
+    console.error('Persist session error:', error);
+    return res.status(500).json({ error: 'Failed to persist session data' });
   }
 });
 

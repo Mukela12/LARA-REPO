@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ClassInsight, Student, Task, Submission, Folder, TeacherCredits } from '../../types';
-import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2 } from 'lucide-react';
+import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CreateTaskForm } from './CreateTaskForm';
@@ -11,7 +11,16 @@ import { TaskList } from './TaskList';
 import { TaskSelector } from './TaskSelector';
 import { FolderManagement } from './FolderManagement';
 import { ShareTaskCard } from './ShareTaskCard';
+import { SaveSessionBanner } from './SaveSessionBanner';
 import { useAppStore } from '../../lib/store';
+import { sessionsApi } from '../../lib/api';
+
+interface SessionInfo {
+  id: string;
+  isLive: boolean;
+  dataPersisted: boolean;
+  dataExpiresAt: string | null;
+}
 
 interface TeacherDashboardProps {
   insights: ClassInsight[];
@@ -23,8 +32,10 @@ interface TeacherDashboardProps {
   folders: Folder[];
   credits: TeacherCredits;
   sessionFeedbacksGenerated?: number;
+  sessionInfo?: SessionInfo | null;
   onNavigate: (tab: string) => void;
   onCreateTask: (task: Task) => void;
+  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   onApproveFeedback: (studentId: string) => void;
   onNavigateToReview: (studentId: string) => void;
   onSelectTask: (taskId: string) => void;
@@ -36,6 +47,7 @@ interface TeacherDashboardProps {
   onUpdateFolder: (folderId: string, name: string, description?: string, color?: string) => void;
   onGenerateFeedback: (studentId: string) => Promise<boolean>;
   onGenerateFeedbackBatch: (studentIds: string[]) => Promise<{ success: number; failed: number }>;
+  onSessionPersisted?: () => void;
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -48,8 +60,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   folders,
   credits,
   sessionFeedbacksGenerated,
+  sessionInfo,
   onNavigate,
   onCreateTask,
+  onUpdateTask,
   onApproveFeedback,
   onNavigateToReview,
   onSelectTask,
@@ -60,17 +74,27 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onDeleteFolder,
   onUpdateFolder,
   onGenerateFeedback,
-  onGenerateFeedbackBatch
+  onGenerateFeedbackBatch,
+  onSessionPersisted
 }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [generatingStudentId, setGeneratingStudentId] = useState<string | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const currentTask = tasks.find(t => t.id === selectedTaskId) || tasks[0];
 
-  // Filter students to only show those who have submissions for the current task
+  // Filter students to show those with submissions OR active students for this task
   const taskStudents = students.filter(student => {
     const submission = submissions[student.id];
-    return submission && submission.taskId === currentTask?.id;
+    // Show if has submission for this task
+    if (submission && submission.taskId === currentTask?.id) {
+      return true;
+    }
+    // Also show active students who joined this task (no submission yet)
+    if (student.status === 'active' && student.taskId === currentTask?.id) {
+      return true;
+    }
+    return false;
   });
 
   const activeStudents = taskStudents.filter(s => s.status !== 'completed').length;
@@ -122,15 +146,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   // Count students ready for feedback
   const readyForFeedbackCount = taskStudents.filter(s => s.status === 'ready_for_feedback').length;
 
-  if (activeTab === 'create') {
+  if (activeTab === 'create' || editingTask) {
     return (
       <div className="p-4 lg:p-8">
         <CreateTaskForm
           onSave={(task) => {
             onCreateTask(task);
+            setEditingTask(null);
             onNavigate('dashboard');
           }}
-          onCancel={() => onNavigate('dashboard')}
+          onCancel={() => {
+            setEditingTask(null);
+            onNavigate('dashboard');
+          }}
+          editTask={editingTask}
+          onUpdate={(taskId, updates) => {
+            onUpdateTask(taskId, updates);
+            setEditingTask(null);
+            onNavigate('dashboard');
+          }}
         />
       </div>
     );
@@ -263,6 +297,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* Edit Task Button */}
+              {currentTask && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingTask(currentTask)}
+                  leftIcon={<Pencil className="w-4 h-4" />}
+                  className="text-slate-600 border-slate-300 hover:bg-slate-50"
+                >
+                  Edit
+                </Button>
+              )}
               {/* Quick Toggle for Task Status */}
               {currentTask && (
                 <Button
@@ -292,7 +338,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onNavigate('create')}
+                onClick={() => {
+                  setEditingTask(null);
+                  onNavigate('create');
+                }}
                 leftIcon={<Plus className="w-4 h-4" />}
                 data-tutorial="create-task"
               >
@@ -316,12 +365,32 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             isDisabled={currentTask.status === 'inactive'}
           />
         )}
+
+        {/* Save Session Banner */}
+        {sessionInfo && sessionInfo.isLive && !sessionInfo.dataPersisted && sessionInfo.dataExpiresAt && (
+          <SaveSessionBanner
+            sessionId={sessionInfo.id}
+            dataExpiresAt={sessionInfo.dataExpiresAt}
+            dataPersisted={sessionInfo.dataPersisted}
+            studentCount={taskStudents.length}
+            onPersist={async () => {
+              try {
+                await sessionsApi.persistSession(sessionInfo.id);
+                onSessionPersisted?.();
+                return true;
+              } catch (error) {
+                console.error('Failed to persist session:', error);
+                return false;
+              }
+            }}
+          />
+        )}
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Active Students</h3>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Active Learners</h3>
             <div className="flex items-end justify-between">
                 <span className="text-3xl font-bold text-slate-900">{activeStudents}</span>
                 <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded font-medium flex items-center gap-1">
@@ -338,7 +407,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    <div className="w-8 h-8 rounded-full bg-white text-purple-600 flex items-center justify-center font-bold text-sm shadow-sm">
                      {readyForFeedbackCount}
                    </div>
-                   <p className="text-sm text-purple-800 leading-tight">Students waiting</p>
+                   <p className="text-sm text-purple-800 leading-tight">Learners waiting</p>
                  </div>
                  {readyForFeedbackCount > 0 && (
                    <Button
@@ -392,16 +461,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </Card>
       </div>
 
-      {/* Student List */}
+      {/* Learner List */}
       <Card noPadding>
           <div className="px-6 py-4 border-b border-slate-100 bg-white">
-            <h3 className="font-semibold text-slate-900">Student Progress</h3>
+            <h3 className="font-semibold text-slate-900">Learner Progress</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
                     <tr>
-                        <th className="px-6 py-3">Student Name</th>
+                        <th className="px-6 py-3">Learner Name</th>
                         <th className="px-6 py-3">Status</th>
                         <th className="px-6 py-3 text-right">Actions</th>
                     </tr>
@@ -410,7 +479,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     {taskStudents.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="px-6 py-8 text-center text-slate-400">
-                          No students have joined this task yet. Share the task code to invite students.
+                          No learners have joined this task yet. Share the task code to invite learners.
                         </td>
                       </tr>
                     ) : (

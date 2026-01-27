@@ -21,6 +21,7 @@ export interface Student {
   name: string;
   status: StudentStatus;
   joinedAt: number;
+  taskId?: string;  // Task student is associated with (for filtering before submission)
 }
 
 export interface Task {

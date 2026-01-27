@@ -15,8 +15,9 @@ import { useAppStore } from './lib/store';
 import { useBackendStore } from './lib/useBackendStore';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
 import { getTaskFromCode } from './lib/taskCodes';
-import { authApi, setStudentToken, getStudentToken, sessionsApi } from './lib/api';
-import { useStudentSocket, useTeacherSocket, FeedbackReadyPayload } from './lib/useSocket';
+import { authApi, setStudentToken, getStudentToken, sessionsApi, validateToken, clearToken, getToken } from './lib/api';
+import { useStudentSocket, useTeacherSocket, useTeacherGlobalSocket, FeedbackReadyPayload, StudentJoinedPayload, GlobalStudentJoinedPayload } from './lib/useSocket';
+import { playJoinSound, playSubmitSound } from './lib/sounds';
 
 type ViewMode = 'teacher_login' | 'student_flow' | 'teacher_dashboard' | 'teacher_review' | 'student_revision';
 
@@ -39,6 +40,7 @@ function App() {
   const {
     state,
     addTask,
+    updateTask,
     addStudent,
     restoreStudent,
     submitWork,
@@ -60,7 +62,10 @@ function App() {
     generateFeedbackForStudent,
     generateFeedbackBatch,
     regenerateFeedback,
-    loadSessionDashboard
+    loadSessionDashboard,
+    updateTaskLiveSessionId,
+    addStudentFromWebSocket,
+    updateStudentFromWebSocket,
   } = store;
 
   // Student Local State
@@ -83,6 +88,14 @@ function App() {
 
   // WebSocket state for tracking real-time updates
   const [receivedFeedbackViaSocket, setReceivedFeedbackViaSocket] = useState(false);
+
+  // Session persistence info for teacher dashboard
+  const [sessionInfo, setSessionInfo] = useState<{
+    id: string;
+    isLive: boolean;
+    dataPersisted: boolean;
+    dataExpiresAt: string | null;
+  } | null>(null);
 
   // WebSocket callback for real-time feedback updates
   const handleFeedbackReady = useCallback((payload: FeedbackReadyPayload) => {
@@ -113,21 +126,83 @@ function App() {
   useStudentSocket(studentSessionId, currentStudentId, handleFeedbackReady);
 
   // WebSocket callback for real-time student submission updates (teacher)
-  const handleStudentSubmitted = useCallback(() => {
-    // Refresh dashboard when a student submits
+  const handleStudentSubmitted = useCallback((payload: { studentId: string }) => {
+    // Play notification sound for teacher
+    playSubmitSound();
+
+    // OPTIMISTIC UPDATE: Immediately update student status to 'ready_for_feedback'
+    if (updateStudentFromWebSocket) {
+      updateStudentFromWebSocket({
+        studentId: payload.studentId,
+        status: 'ready_for_feedback',
+      });
+    }
+
+    // Background refresh to get submission content (for full data consistency)
     const task = state.tasks.find(t => t.id === state.currentTaskId);
     if (task?.liveSessionId) {
       loadSessionDashboard(task.liveSessionId);
     }
-  }, [state.tasks, state.currentTaskId, loadSessionDashboard]);
+  }, [state.tasks, state.currentTaskId, loadSessionDashboard, updateStudentFromWebSocket]);
+
+  // WebSocket callback for real-time student join updates (teacher) - session-specific
+  const handleStudentJoined = useCallback((payload: StudentJoinedPayload) => {
+    console.log('Student joined:', payload.studentName);
+
+    // OPTIMISTIC UPDATE: Add student directly to state (instant UI update!)
+    if (addStudentFromWebSocket && state.currentSessionId) {
+      addStudentFromWebSocket({
+        id: payload.studentId,
+        name: payload.studentName,
+        sessionId: state.currentSessionId,
+        taskId: state.currentTaskId,
+      });
+    }
+
+    // No need to call loadSessionDashboard - optimistic update already shows the student
+  }, [state.currentSessionId, state.currentTaskId, addStudentFromWebSocket]);
+
+  // WebSocket callback for global student join updates (teacher) - receives from ALL sessions
+  // This handles the case where liveSessionId doesn't exist yet on the task
+  const handleGlobalStudentJoined = useCallback((payload: GlobalStudentJoinedPayload) => {
+    console.log('[Global] Student joined:', payload.studentName, 'taskId:', payload.taskId, 'sessionId:', payload.sessionId);
+
+    // Play notification sound for teacher
+    playJoinSound();
+
+    // Update task with liveSessionId if not already set
+    if (updateTaskLiveSessionId) {
+      updateTaskLiveSessionId(payload.taskId, payload.sessionId);
+    }
+
+    // OPTIMISTIC UPDATE: Add student directly to state (instant UI update!)
+    if (addStudentFromWebSocket) {
+      addStudentFromWebSocket({
+        id: payload.studentId,
+        name: payload.studentName,
+        sessionId: payload.sessionId,
+        taskId: payload.taskId,
+      });
+    }
+
+    // Only call loadSessionDashboard for initial setup when switching to this task
+    // The optimistic update already shows the student instantly
+  }, [updateTaskLiveSessionId, addStudentFromWebSocket]);
 
   // Get current session ID for teacher WebSocket
   const currentSessionId = state.tasks.find(t => t.id === state.currentTaskId)?.liveSessionId || null;
 
-  // Use WebSocket for real-time teacher updates
+  // Use WebSocket for real-time teacher updates (session-specific)
   useTeacherSocket(
     currentView === 'teacher_dashboard' ? currentSessionId : null,
-    handleStudentSubmitted
+    handleStudentSubmitted,
+    handleStudentJoined
+  );
+
+  // Use global WebSocket for teacher to receive student joins even when liveSessionId is null
+  useTeacherGlobalSocket(
+    currentView === 'teacher_dashboard' ? currentTeacher?.id || null : null,
+    handleGlobalStudentJoined
   );
 
   // Check for logged-in teacher on mount
@@ -138,6 +213,21 @@ function App() {
       setCurrentView('teacher_dashboard');
     }
   }, []);
+
+  // Validate token on app initialization - clear invalid tokens
+  useEffect(() => {
+    const validateSession = async () => {
+      const token = getToken();
+      if (token && currentTeacher) {
+        const isValid = await validateToken();
+        if (!isValid) {
+          clearToken();
+          setCurrentTeacher(null);
+        }
+      }
+    };
+    validateSession();
+  }, [currentTeacher]);
 
   // Check for taskCode or studentId in URL parameters on mount ONLY
   // This should only run once - not on every state change
@@ -271,14 +361,35 @@ function App() {
       const task = state.tasks.find(t => t.id === state.currentTaskId);
       if (task?.liveSessionId) {
         // Initial load when task is selected
-        loadSessionDashboard(task.liveSessionId);
+        loadSessionDashboard(task.liveSessionId).then((dashboard) => {
+          if (dashboard) {
+            setSessionInfo({
+              id: dashboard.session.id,
+              isLive: dashboard.session.isLive,
+              dataPersisted: dashboard.session.dataPersisted,
+              dataExpiresAt: dashboard.session.dataExpiresAt,
+            });
+          }
+        });
 
         // Reduced polling as fallback (WebSocket handles real-time)
         const interval = setInterval(() => {
-          loadSessionDashboard(task.liveSessionId!);
+          loadSessionDashboard(task.liveSessionId!).then((dashboard) => {
+            if (dashboard) {
+              setSessionInfo({
+                id: dashboard.session.id,
+                isLive: dashboard.session.isLive,
+                dataPersisted: dashboard.session.dataPersisted,
+                dataExpiresAt: dashboard.session.dataExpiresAt,
+              });
+            }
+          });
         }, 10000); // 10 seconds instead of 2
 
         return () => clearInterval(interval);
+      } else {
+        // Clear session info when no live session
+        setSessionInfo(null);
       }
     }
   }, [currentView, currentTeacher, state.currentTaskId, state.tasks, loadSessionDashboard]);
@@ -428,7 +539,9 @@ function App() {
                 folders={state.folders}
                 credits={state.credits}
                 sessionFeedbacksGenerated={state.sessionFeedbacksGenerated}
+                sessionInfo={sessionInfo}
                 onCreateTask={addTask}
+                onUpdateTask={updateTask}
                 onApproveFeedback={approveFeedback}
                 onNavigateToReview={handleNavigateToReview}
                 onSelectTask={selectTask}
@@ -440,6 +553,22 @@ function App() {
                 onUpdateFolder={updateFolder}
                 onGenerateFeedback={generateFeedbackForStudent}
                 onGenerateFeedbackBatch={generateFeedbackBatch}
+                onSessionPersisted={() => {
+                  // Reload session info after persisting
+                  const task = state.tasks.find(t => t.id === state.currentTaskId);
+                  if (task?.liveSessionId) {
+                    loadSessionDashboard(task.liveSessionId).then((dashboard) => {
+                      if (dashboard) {
+                        setSessionInfo({
+                          id: dashboard.session.id,
+                          isLive: dashboard.session.isLive,
+                          dataPersisted: dashboard.session.dataPersisted,
+                          dataExpiresAt: dashboard.session.dataExpiresAt,
+                        });
+                      }
+                    });
+                  }
+                }}
             />
         </DashboardLayout>
       </OnboardingProvider>
@@ -604,6 +733,8 @@ function App() {
             onContinue={handleStudentContinue}
             masteryConfirmed={submission.masteryConfirmed}
             onComplete={handleComplete}
+            task={currentTask}
+            submission={submission}
           />
         </div>
       );

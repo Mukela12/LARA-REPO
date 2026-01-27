@@ -27,6 +27,13 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [revisionTimeElapsed, setRevisionTimeElapsed] = useState(0);
 
+  // Sync revision content when submission loads/changes
+  useEffect(() => {
+    if (submission?.content) {
+      setRevisionContent(submission.content);
+    }
+  }, [submission?.content]);
+
   // Show max revisions reached screen - neutral language (MVP1 compliance)
   if (maxRevisionsReached) {
     return (

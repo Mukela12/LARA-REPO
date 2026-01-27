@@ -4,6 +4,15 @@ import { Student, Task, FeedbackSession, Submission, NextStep, Folder, TeacherCr
 import { generateUniqueTaskCode, saveTaskCodeMapping, getAllTaskCodes } from './taskCodes';
 import { generateFeedback } from './gemini';
 
+// Universal Learning Expectations - EDberg Education standard criteria
+const UNIVERSAL_LEARNING_EXPECTATIONS = [
+  "Clarity of response - Is the answer clear and easy to understand?",
+  "Use of evidence and/or examples - Does the response include relevant evidence or examples?",
+  "Reasoning and explanation - Is the thinking process explained?",
+  "Organisation - Is the response well-structured?",
+  "Language for audience and purpose - Is the language appropriate?"
+];
+
 // Initial Mock Data
 const INITIAL_TASKS: Task[] = [
   {
@@ -118,6 +127,24 @@ export function useAppStore(teacherId?: string) {
     }));
   };
 
+  const updateTask = (taskId: string, updates: Partial<Task>) => {
+    setState(prev => {
+      const updatedTasks = prev.tasks.map(task =>
+        task.id === taskId
+          ? { ...task, ...updates, updatedAt: new Date() }
+          : task
+      );
+
+      // Update global mapping if task has a code
+      const updatedTask = updatedTasks.find(t => t.id === taskId);
+      if (updatedTask?.taskCode) {
+        saveTaskCodeMapping(teacherId, updatedTask.taskCode, updatedTask);
+      }
+
+      return { ...prev, tasks: updatedTasks };
+    });
+  };
+
   const addStudent = (name: string): Student => {
     const newStudent: Student = {
       id: uuidv4(),
@@ -157,23 +184,29 @@ export function useAppStore(teacherId?: string) {
 
   // Submit work without feedback - teacher will generate later
   const submitWork = (studentId: string, taskId: string, content: string, feedback: FeedbackSession | null, timeElapsed?: number) => {
-    setState(prev => ({
-      ...prev,
-      // If no feedback, status is 'ready_for_feedback', otherwise 'submitted'
-      students: prev.students.map(s => s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s),
-      submissions: {
-        ...prev.submissions,
-        [studentId]: {
-          studentId,
-          taskId,
-          content,
-          feedback,
-          timestamp: Date.now(),
-          timeElapsed,
-          revisionCount: 0
+    setState(prev => {
+      const existingSubmission = prev.submissions[studentId];
+      // Preserve existing content if new content is empty (e.g., when adding feedback)
+      const finalContent = content || existingSubmission?.content || '';
+
+      return {
+        ...prev,
+        // If no feedback, status is 'ready_for_feedback', otherwise 'submitted'
+        students: prev.students.map(s => s.id === studentId ? { ...s, status: feedback ? 'submitted' : 'ready_for_feedback' } : s),
+        submissions: {
+          ...prev.submissions,
+          [studentId]: {
+            studentId,
+            taskId,
+            content: finalContent,
+            feedback,
+            timestamp: Date.now(),
+            timeElapsed: timeElapsed ?? existingSubmission?.timeElapsed,
+            revisionCount: existingSubmission?.revisionCount || 0
+          }
         }
-      }
-    }));
+      };
+    });
   };
 
   const approveFeedback = (studentId: string, isMastered?: boolean) => {
@@ -416,8 +449,13 @@ export function useAppStore(teacherId?: string) {
     }));
 
     try {
+      // Determine which criteria to use - ULE or custom
+      const criteriaToUse = task.universalExpectations
+        ? UNIVERSAL_LEARNING_EXPECTATIONS
+        : task.successCriteria;
+
       // Generate feedback using AI
-      const feedback = await generateFeedback(task.prompt, task.successCriteria, submission.content);
+      const feedback = await generateFeedback(task.prompt, criteriaToUse, submission.content);
 
       // Update submission with feedback and set status to 'submitted'
       setState(prev => ({
@@ -482,8 +520,13 @@ export function useAppStore(teacherId?: string) {
     }
 
     try {
+      // Determine which criteria to use - ULE or custom
+      const criteriaToUse = task.universalExpectations
+        ? UNIVERSAL_LEARNING_EXPECTATIONS
+        : task.successCriteria;
+
       // Generate new feedback
-      const feedback = await generateFeedback(task.prompt, task.successCriteria, submission.content);
+      const feedback = await generateFeedback(task.prompt, criteriaToUse, submission.content);
 
       // Update submission with new feedback
       setState(prev => ({
@@ -520,9 +563,33 @@ export function useAppStore(teacherId?: string) {
     // Local store loads from localStorage automatically
   };
 
+  // No-op for local store (backend only feature)
+  const updateTaskLiveSessionId = (_taskId: string, _sessionId: string) => {
+    // Local store doesn't use live sessions
+  };
+
+  // No-op for local store (backend only feature - WebSocket optimistic updates)
+  const addStudentFromWebSocket = (_student: {
+    id: string;
+    name: string;
+    sessionId: string;
+    taskId: string;
+  }) => {
+    // Local store doesn't use WebSocket updates
+  };
+
+  // No-op for local store (backend only feature - WebSocket optimistic updates)
+  const updateStudentFromWebSocket = (_update: {
+    studentId: string;
+    status?: Student['status'];
+  }) => {
+    // Local store doesn't use WebSocket updates
+  };
+
   return {
     state,
     addTask,
+    updateTask,
     addStudent,
     restoreStudent,
     submitWork,
@@ -545,6 +612,9 @@ export function useAppStore(teacherId?: string) {
     generateFeedbackBatch,
     regenerateFeedback,
     loadSessionDashboard,
-    loadData
+    loadData,
+    updateTaskLiveSessionId,
+    addStudentFromWebSocket,
+    updateStudentFromWebSocket,
   };
 }

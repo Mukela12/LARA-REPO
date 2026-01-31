@@ -1,31 +1,104 @@
 # LARA - Learning Assessment & Response Assistant
 
-A real-time classroom feedback system that helps teachers provide AI-generated, personalized feedback to students.
+A real-time classroom feedback system that helps teachers provide AI-generated, personalized feedback to students. Built with a modern React frontend and Express backend, featuring WebSocket communication for instant feedback delivery.
 
-## Features
+## Tech Stack
 
-- **Real-time Feedback**: Students receive feedback instantly via WebSocket when teachers approve it
-- **AI-Powered Feedback Generation**: Uses Claude AI to generate personalized feedback based on student submissions
-- **Teacher Dashboard**: Monitor student progress, generate and review feedback in real-time
-- **Student Flow**: Simple task code entry, work submission, and feedback viewing
-- **Task Management**: Create, organize, and manage tasks with folders
+### Frontend
+- **React 18** + **TypeScript** + **Vite** - Fast development and type safety
+- **Tailwind CSS** (CDN) + **Lucide React** icons - Styling and iconography
+- **Socket.io Client** - Real-time WebSocket communication
+- **Framer Motion** - Smooth animations and transitions
+- **Recharts** - Analytics and data visualization
+
+### Backend
+- **Express 5** + **TypeScript** - REST API server
+- **PostgreSQL** + **Prisma ORM** - Persistent data storage
+- **Redis** (ioredis) - Live session data with 16-hour TTL
+- **Socket.io** - WebSocket server for real-time updates
+- **Anthropic Claude API** - AI-powered feedback generation
+- **JWT** + **bcrypt** - Authentication and password hashing
 
 ## Architecture
 
 ```
-Frontend (React + Vite)          Backend (Express + Socket.io)
-├── Student Entry               ├── REST API Routes
-├── Teacher Dashboard           ├── WebSocket Server
-├── Real-time Updates ◄────────►├── Redis (session cache)
-└── Socket.io Client            └── PostgreSQL (persistence)
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│    Frontend     │────▶│     Backend     │────▶│   Claude AI     │
+│  React + Vite   │◀────│  Express + WS   │◀────│   (Anthropic)   │
+└─────────────────┘     └────────┬────────┘     └─────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    ▼                         ▼
+              ┌──────────┐              ┌──────────┐
+              │  Redis   │              │ Postgres │
+              │  (Live)  │              │ (Persist)│
+              └──────────┘              └──────────┘
 ```
 
-## Prerequisites
+## Key Features
 
-- Node.js >= 20.19.0
-- PostgreSQL database
-- Redis (optional, for session caching)
-- Anthropic API key (for AI feedback generation)
+- **Real-time Feedback** - Instant delivery via WebSocket when teachers approve
+- **AI-Powered Feedback Generation** - Claude AI analyzes submissions with mastery detection
+- **Dual-Mode Stores** - Demo mode (localStorage) vs production (backend API)
+- **Task Codes** - Kahoot-style 6-digit alphanumeric codes for easy session joining
+- **Revision Tracking** - Students can revise up to 3 times with feedback history
+- **Folder Organization** - Teachers organize tasks into folders
+- **Quota/Credit System** - Tier-based monthly AI usage limits for teachers
+
+## Data Flow
+
+### Student Flow
+```
+Enter Code → Join Session → Submit Work → [Wait] → Receive Feedback → Revise (optional)
+```
+
+### Teacher Flow
+```
+Login → Create Task → View Dashboard → Generate Feedback → Review/Edit → Approve → Release
+```
+
+## WebSocket Events
+
+| Event | Direction | Purpose |
+|-------|-----------|---------|
+| `student:join-room` | Client → Server | Join session room |
+| `teacher:join-room` | Client → Server | Teacher monitors session |
+| `student-joined` | Server → Client | Notify teacher of new student |
+| `student-submitted` | Server → Client | Notify teacher of submission |
+| `feedback-ready` | Server → Client | Deliver approved feedback to student |
+
+## Database Models (Prisma)
+
+| Model | Purpose |
+|-------|---------|
+| **Teacher** | Authentication, tier level, quota tracking |
+| **Task** | Title, prompt, success criteria, taskCode |
+| **TaskSession** | Live/historical sessions, analytics |
+| **Student** | Ephemeral, session-scoped student records |
+| **StudentSubmission** | Content, revision count, status |
+| **SubmissionFeedback** | AI-generated feedback JSON |
+| **Folder** | Task organization hierarchy |
+| **AiUsageLog** | Quota and usage tracking |
+
+## AI Feedback Generation
+
+- **Model**: `claude-haiku-4-5-20251001`
+- **Input**: Task prompt + Success criteria + Student work
+- **Output**: Structured JSON containing:
+  - `goal` - Learning objective summary
+  - `masteryAchieved` - Boolean mastery determination
+  - `strengths[]` - What the student did well (with text anchors/quotes)
+  - `growthAreas[]` - Areas for improvement (with text anchors)
+  - `nextSteps[]` - Actionable items for the student
+
+## Hybrid Data Storage
+
+| Data | Redis | Postgres | Reason |
+|------|:-----:|:--------:|--------|
+| Live students | ✓ | ✗ | Real-time access, 16h TTL |
+| Submissions | ✓ | ✓ | Fast writes, then persisted |
+| Tasks | ✗ | ✓ | Permanent content |
+| Teachers | ✗ | ✓ | Auth data |
 
 ## Environment Variables
 
@@ -44,41 +117,67 @@ PORT=3001
 VITE_API_URL=http://localhost:3001
 ```
 
-## Run Locally
+## Running Locally
 
-1. Install dependencies:
-   ```bash
-   npm install
-   cd backend && npm install
-   ```
+### Prerequisites
+- Node.js >= 20.19.0
+- PostgreSQL database
+- Redis server
+- Anthropic API key
 
-2. Set up environment variables (see above)
+### Installation
+```bash
+# Install frontend dependencies
+npm install
 
-3. Run the backend:
-   ```bash
-   cd backend && npm run dev
-   ```
+# Install backend dependencies
+cd backend && npm install
+```
 
-4. Run the frontend (in a new terminal):
-   ```bash
-   npm run dev
-   ```
+### Start Development Servers
+```bash
+# Terminal 1 - Backend
+cd backend && npm run dev
+
+# Terminal 2 - Frontend
+npm run dev
+```
+
+## Project Structure
+
+```
+/
+├── components/
+│   ├── student/        # StudentEntry, FeedbackView
+│   ├── teacher/        # Dashboard, ReviewView
+│   └── ui/             # Button, Card, Badge, etc.
+├── lib/
+│   ├── api.ts          # HTTP client
+│   ├── useSocket.ts    # WebSocket hooks
+│   ├── store.ts        # Local state (demo mode)
+│   └── useBackendStore.ts  # API state (production)
+├── backend/
+│   ├── src/
+│   │   ├── routes/     # auth, tasks, sessions, folders
+│   │   ├── lib/        # redis, socket, prisma
+│   │   └── services/   # feedback generation
+│   └── prisma/
+│       └── schema.prisma
+└── types.ts            # Shared TypeScript types
+```
+
+## Key Algorithms
+
+- **Task Code Generation**: 6-character alphanumeric codes excluding confusing characters (I, O, L, 0, 1)
+- **Quota Management**: Monthly reset with tier-based limits (Free, Basic, Premium)
+- **Session Persistence**: Redis → Postgres migration when sessions end for archival
+- **Mastery Detection**: AI-driven analysis with teacher override capability
 
 ## Deployment
 
-The app is configured for Railway deployment:
-
+Configured for Railway deployment:
 - **Backend**: Deploys from `backend/` directory
 - **Frontend**: Deploys from root directory (Vite build)
-
-## WebSocket Events
-
-| Event | Direction | Purpose |
-|-------|-----------|---------|
-| `student:join-room` | Client → Server | Student joins session room |
-| `teacher:join-room` | Client → Server | Teacher joins session room |
-| `feedback-ready` | Server → Client | Notify student feedback is approved |
-| `student-submitted` | Server → Client | Notify teacher of new submission |
 
 ## License
 

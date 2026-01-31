@@ -148,9 +148,12 @@ router.post('/validate-code', async (req, res: Response) => {
       return res.status(400).json({ error: 'Task code is required' });
     }
 
+    // Normalize the task code: uppercase and remove all hyphens/spaces
+    const normalizedCode = taskCode.toUpperCase().replace(/[-\s]/g, '');
+
     // Find the task by code
     const task = await prisma.task.findUnique({
-      where: { taskCode: taskCode.toUpperCase().replace('-', '') },
+      where: { taskCode: normalizedCode },
       select: { id: true, title: true, status: true },
     });
 
@@ -167,8 +170,12 @@ router.post('/validate-code', async (req, res: Response) => {
       valid: true,
       taskTitle: task.title,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Validate code error:', error);
+    // Check for database connection errors
+    if (error?.code === 'P1001' || error?.code === 'P1002' || error?.message?.includes('ECONNRESET')) {
+      return res.status(503).json({ error: 'Service temporarily unavailable. Please try again.' });
+    }
     return res.status(500).json({ error: 'Failed to validate code' });
   }
 });
@@ -182,9 +189,10 @@ router.post('/session/join', async (req, res: Response) => {
       return res.status(400).json({ error: 'Task code and student name are required' });
     }
 
-    // Find the task by code
+    // Normalize and find the task by code
+    const normalizedCode = taskCode.toUpperCase().replace(/[-\s]/g, '');
     const task = await prisma.task.findUnique({
-      where: { taskCode: taskCode.toUpperCase().replace('-', '') },
+      where: { taskCode: normalizedCode },
       include: { teacher: true },
     });
 

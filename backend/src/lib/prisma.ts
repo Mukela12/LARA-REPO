@@ -8,9 +8,21 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   });
 
+// Configure connection pool for Railway's PostgreSQL
+// Railway can have connection resets, so we need resilience
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// Handle connection errors gracefully
+prisma.$on('error' as never, (e: Error) => {
+  console.error('Prisma error:', e);
+});
 
 // Health check function to validate database connection
 export async function validateDatabaseConnection(): Promise<boolean> {

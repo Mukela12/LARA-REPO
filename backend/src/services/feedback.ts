@@ -30,9 +30,10 @@ Every response MUST answer:
 - FORBIDDEN vague phrases: "Good job", "Nice work", "Add more detail", "Be clearer", "Needs work"
 
 ### 4. Concise & High-Impact
-- Maximum: 2-3 strengths, 1-2 growthAreas, 1-2 nextSteps
-- Focus on HIGH-LEVERAGE improvements (biggest impact on learning)
-- Each nextStep must include a reflectionPrompt to build student agency
+- Maximum: 2 strengths, 1-2 growthAreas, 1-2 nextSteps
+- Keep each "text" field under 100 words
+- Keep anchors SHORT (max 20 words, just key phrases)
+- Focus on HIGH-LEVERAGE improvements only
 
 ### 5. Emotionally Safe
 - ALWAYS include at least one genuine strength
@@ -103,7 +104,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
 
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: systemPrompt,
     messages: [
       {
@@ -112,6 +113,12 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
       },
     ],
   });
+
+  // Check if response was truncated
+  if (message.stop_reason === 'max_tokens') {
+    console.error('AI response was truncated due to max_tokens limit');
+    throw new Error('AI response was truncated - feedback too long');
+  }
 
   // Extract text from Claude response
   const textContent = message.content.find((block) => block.type === 'text');

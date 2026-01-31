@@ -9,6 +9,8 @@ export async function generateFeedback(
 ): Promise<FeedbackSession> {
   const systemPrompt = `You are LARA, a formative feedback assistant.
 
+CRITICAL: You MUST respond with ONLY valid JSON. No introductory text, no explanations, no markdown - ONLY the JSON object. Start your response with { and end with }.
+
 ## CORE PRINCIPLES
 
 ### 1. Three Questions Framework
@@ -61,7 +63,9 @@ ${criteria.map((c, i) => `${i}. ${c}`).join('\n')}
 
 ---
 
-## OUTPUT FORMAT (JSON only)
+## OUTPUT FORMAT
+
+IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Start with { and end with }.
 
 {
   "goal": "Clear restatement of what success looks like based on the criteria",
@@ -131,26 +135,39 @@ ${criteria.map((c, i) => `${i}. ${c}`).join('\n')}
 
   // Extract JSON object - find the outermost { } pair
   const firstBrace = jsonText.indexOf('{');
-  if (firstBrace !== -1) {
-    let depth = 0;
-    let lastBrace = -1;
-    for (let i = firstBrace; i < jsonText.length; i++) {
-      if (jsonText[i] === '{') depth++;
-      else if (jsonText[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          lastBrace = i;
-          break;
-        }
+  if (firstBrace === -1) {
+    console.error('No JSON object found in response:', jsonText.substring(0, 200));
+    throw new Error('AI response did not contain valid JSON. Response started with: ' + jsonText.substring(0, 50));
+  }
+
+  let depth = 0;
+  let lastBrace = -1;
+  for (let i = firstBrace; i < jsonText.length; i++) {
+    if (jsonText[i] === '{') depth++;
+    else if (jsonText[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        lastBrace = i;
+        break;
       }
-    }
-    if (lastBrace !== -1) {
-      jsonText = jsonText.slice(firstBrace, lastBrace + 1);
     }
   }
 
+  if (lastBrace === -1) {
+    console.error('Incomplete JSON object in response:', jsonText.substring(0, 200));
+    throw new Error('AI response contained incomplete JSON');
+  }
+
+  jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+
   // Parse JSON from response
-  const data = JSON.parse(jsonText);
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch (parseError) {
+    console.error('JSON parse error:', parseError, 'Raw text:', jsonText.substring(0, 500));
+    throw new Error('Failed to parse AI response as JSON');
+  }
 
   // === POST-GENERATION NORMALIZATION ===
 

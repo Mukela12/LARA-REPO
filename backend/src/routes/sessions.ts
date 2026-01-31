@@ -400,8 +400,9 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
         }
 
         results.push({ studentId, success: true });
-      } catch (error) {
-        console.error(`Failed to generate for ${studentId}:`, error);
+      } catch (error: any) {
+        const errorMessage = error?.message || error?.toString() || 'Unknown error';
+        console.error(`Failed to generate for ${studentId}:`, errorMessage, error);
 
         // Revert status in Redis
         const revertData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
@@ -411,7 +412,7 @@ router.post('/:sessionId/generate-feedback', authenticateTeacher, async (req: Au
           await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
         }
 
-        results.push({ studentId, success: false, error: 'Generation failed' });
+        results.push({ studentId, success: false, error: `Generation failed: ${errorMessage}` });
       }
     }
 

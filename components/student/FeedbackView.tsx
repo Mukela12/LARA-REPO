@@ -83,6 +83,9 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
     sessionData.nextSteps.forEach(step => {
       lines.push(`- **${step.actionVerb}** ${step.target}`);
       lines.push(`  Success looks like: ${step.successIndicator}`);
+      if (step.reflectionPrompt) {
+        lines.push(`  _Reflect: ${step.reflectionPrompt}_`);
+      }
     });
     lines.push('');
 
@@ -162,6 +165,13 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
                 <p className="text-slate-700 text-sm leading-relaxed">
                   {item.text}
                 </p>
+                {/* Traceability: Show anchor from student work */}
+                {item.anchors && item.anchors.length > 0 && (
+                   <div className="mt-2 text-xs text-slate-500 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 italic flex items-start gap-2">
+                     <span className="text-emerald-300">❝</span>
+                     {item.anchors[0]}
+                   </div>
+                )}
               </div>
             ))}
           </div>
@@ -267,6 +277,11 @@ export const FeedbackView: React.FC<FeedbackViewProps> = ({
                         <Sparkles className="w-3 h-3 text-brand-400" />
                         {step.successIndicator}
                     </div>
+                    {step.reflectionPrompt && (
+                      <p className="mt-2 text-sm text-slate-500 italic bg-slate-50 p-2 rounded">
+                        <span className="font-medium not-italic">Reflect:</span> {step.reflectionPrompt}
+                      </p>
+                    )}
                   </div>
                 </label>
               ))}

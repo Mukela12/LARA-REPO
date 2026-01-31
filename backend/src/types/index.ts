@@ -21,6 +21,7 @@ export interface FeedbackItem {
   type: FeedbackType;
   text: string;
   anchors?: string[];
+  criterionRef?: number | null; // Links to success criteria index (0-based)
 }
 
 export interface NextStep {
@@ -28,6 +29,7 @@ export interface NextStep {
   actionVerb: string;
   target: string;
   successIndicator: string;
+  reflectionPrompt?: string; // Promotes student agency
   ctaText: string;
   actionType: 'revise' | 'improve_section' | 'reupload' | 'rehearse';
 }

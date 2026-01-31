@@ -1,10 +1,10 @@
-import { FeedbackSession, FeedbackItem } from '../types';
+import { FeedbackSession, FeedbackItem, NextStep } from '../types';
 
 export type WarningSeverity = 'strong' | 'soft';
 
 export interface FeedbackWarning {
   id: string;
-  type: 'ability_praise' | 'peer_comparison' | 'invented_criteria' | 'vague_comment' | 'missing_feedback_types' | 'low_specificity';
+  type: 'ability_praise' | 'peer_comparison' | 'invented_criteria' | 'vague_comment' | 'missing_feedback_types' | 'low_specificity' | 'missing_anchors' | 'excessive_feedback_count' | 'missing_reflection' | 'no_strengths' | 'cta_too_long';
   severity: WarningSeverity;
   title: string;
   description: string;
@@ -213,6 +213,146 @@ function checkLowSpecificity(feedback: FeedbackSession): FeedbackWarning[] {
 }
 
 /**
+ * Check for missing anchors in feedback items
+ */
+function checkMissingAnchors(feedback: FeedbackSession): FeedbackWarning[] {
+  const warnings: FeedbackWarning[] = [];
+
+  // Check strengths
+  feedback.strengths.forEach((item, index) => {
+    if (!item.anchors || item.anchors.length === 0) {
+      warnings.push({
+        id: `missing-anchors-strength-${index}`,
+        type: 'missing_anchors',
+        severity: 'soft',
+        title: 'Missing Evidence',
+        description: 'This strength lacks a direct quote from the student\'s work. Adding an anchor makes feedback more specific.',
+        location: `Strength #${index + 1}`,
+      });
+    }
+  });
+
+  // Check growth areas
+  feedback.growthAreas.forEach((item, index) => {
+    if (!item.anchors || item.anchors.length === 0) {
+      warnings.push({
+        id: `missing-anchors-growth-${index}`,
+        type: 'missing_anchors',
+        severity: 'soft',
+        title: 'Missing Evidence',
+        description: 'This growth area lacks a direct quote from the student\'s work. Adding an anchor helps the student understand where to focus.',
+        location: `Growth Area #${index + 1}`,
+      });
+    }
+  });
+
+  return warnings;
+}
+
+/**
+ * Check for excessive feedback count (should be max 3 strengths, 2 growth areas, 2 next steps)
+ */
+function checkExcessiveCount(feedback: FeedbackSession): FeedbackWarning[] {
+  const warnings: FeedbackWarning[] = [];
+
+  if (feedback.strengths.length > 3) {
+    warnings.push({
+      id: 'excessive-strengths',
+      type: 'excessive_feedback_count',
+      severity: 'soft',
+      title: 'Too Many Strengths',
+      description: `Found ${feedback.strengths.length} strengths. Consider limiting to 2-3 high-impact items for better focus.`,
+    });
+  }
+
+  if (feedback.growthAreas.length > 2) {
+    warnings.push({
+      id: 'excessive-growth-areas',
+      type: 'excessive_feedback_count',
+      severity: 'soft',
+      title: 'Too Many Growth Areas',
+      description: `Found ${feedback.growthAreas.length} growth areas. Consider limiting to 1-2 high-leverage improvements.`,
+    });
+  }
+
+  if (feedback.nextSteps.length > 2) {
+    warnings.push({
+      id: 'excessive-next-steps',
+      type: 'excessive_feedback_count',
+      severity: 'soft',
+      title: 'Too Many Next Steps',
+      description: `Found ${feedback.nextSteps.length} next steps. Consider limiting to 1-2 actionable steps.`,
+    });
+  }
+
+  return warnings;
+}
+
+/**
+ * Check for missing reflection prompts in next steps
+ */
+function checkMissingReflection(feedback: FeedbackSession): FeedbackWarning[] {
+  const warnings: FeedbackWarning[] = [];
+
+  feedback.nextSteps.forEach((step, index) => {
+    if (!step.reflectionPrompt) {
+      warnings.push({
+        id: `missing-reflection-${index}`,
+        type: 'missing_reflection',
+        severity: 'soft',
+        title: 'Missing Reflection Prompt',
+        description: 'This next step lacks a reflection prompt to encourage student metacognition.',
+        location: `Next Step #${index + 1}`,
+      });
+    }
+  });
+
+  return warnings;
+}
+
+/**
+ * Check if feedback has no strengths (violates emotional safety)
+ */
+function checkNoStrengths(feedback: FeedbackSession): FeedbackWarning[] {
+  const warnings: FeedbackWarning[] = [];
+
+  if (feedback.strengths.length === 0) {
+    warnings.push({
+      id: 'no-strengths',
+      type: 'no_strengths',
+      severity: 'strong',
+      title: 'No Strengths Identified',
+      description: 'Feedback must include at least one strength to maintain emotional safety and encourage the student.',
+    });
+  }
+
+  return warnings;
+}
+
+/**
+ * Check for CTA text that is too long
+ */
+function checkCtaTooLong(feedback: FeedbackSession): FeedbackWarning[] {
+  const warnings: FeedbackWarning[] = [];
+
+  feedback.nextSteps.forEach((step, index) => {
+    if (step.ctaText && step.ctaText.length > 30) {
+      warnings.push({
+        id: `cta-too-long-${index}`,
+        type: 'cta_too_long',
+        severity: 'soft',
+        title: 'CTA Text Too Long',
+        description: `Button text is ${step.ctaText.length} characters. Should be ≤30 for mobile display.`,
+        location: `Next Step #${index + 1}`,
+        matchedText: step.ctaText,
+      });
+    }
+  });
+
+  return warnings;
+}
+
+/**
  * Check for invented criteria (criteria not in the original success criteria)
  * This requires the original success criteria to be passed in
  */
@@ -280,6 +420,13 @@ export function validateFeedback(
   warnings.push(...checkVagueComments(feedback));
   warnings.push(...checkMissingFeedbackTypes(feedback));
   warnings.push(...checkLowSpecificity(feedback));
+
+  // New LARA principle-aligned checks
+  warnings.push(...checkMissingAnchors(feedback));
+  warnings.push(...checkExcessiveCount(feedback));
+  warnings.push(...checkMissingReflection(feedback));
+  warnings.push(...checkNoStrengths(feedback));
+  warnings.push(...checkCtaTooLong(feedback));
 
   if (successCriteria.length > 0) {
     warnings.push(...checkInventedCriteria(feedback, successCriteria));

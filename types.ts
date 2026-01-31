@@ -52,6 +52,7 @@ export interface FeedbackItem {
   type: FeedbackType;
   text: string;
   anchors?: string[]; // Quotes from student work
+  criterionRef?: number | null; // Links to success criteria index (0-based)
 }
 
 export interface NextStep {
@@ -59,6 +60,7 @@ export interface NextStep {
   actionVerb: string;
   target: string;
   successIndicator: string;
+  reflectionPrompt?: string; // Promotes student agency
   ctaText: string; // Max 30 chars
   actionType: 'revise' | 'improve_section' | 'reupload' | 'rehearse';
 }

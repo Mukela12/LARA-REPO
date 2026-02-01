@@ -48,7 +48,8 @@ app.use(cors({
 }));
 
 // Explicit OPTIONS handler for preflight (as a fallback)
-app.options('*', cors());
+// Use regex pattern since path-to-regexp no longer supports '*' wildcard
+app.options(/(.*)/, cors());
 
 app.use(express.json());
 

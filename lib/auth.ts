@@ -1,7 +1,7 @@
 // Teacher Authentication Utilities
 // Uses backend API for authentication with JWT tokens
 
-import { authApi, setToken, clearToken, getToken } from './api';
+import { authApi, setToken, clearToken, getToken, clearStudentToken } from './api';
 
 export interface Teacher {
   id: string;
@@ -73,6 +73,7 @@ export async function logIn(
 // Log out current teacher
 export function logOut(): void {
   clearToken();
+  clearStudentToken();
   localStorage.removeItem(CURRENT_TEACHER_KEY);
 }
 

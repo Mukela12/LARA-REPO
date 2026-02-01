@@ -51,7 +51,7 @@ export const TutorialStep: React.FC<TutorialStepProps> = ({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ duration: 0.2 }}
-      className="fixed z-50 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+      className="fixed z-50 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
       style={{
         top: position.top,
         left: position.left,

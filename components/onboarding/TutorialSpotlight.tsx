@@ -119,6 +119,27 @@ export const getTooltipPosition = (
   targetSelector: string | null,
   position: 'top' | 'bottom' | 'left' | 'right' | 'center'
 ): { top: number; left: number; transformOrigin: string } => {
+  // Viewport boundary clamping constants
+  const tooltipWidth = 320; // w-80 = 20rem = 320px
+  const tooltipHeight = 200; // approximate height
+  const padding = 16;
+
+  const clampPosition = (result: { top: number; left: number; transformOrigin: string }) => {
+    // Clamp horizontal position
+    result.left = Math.max(
+      padding + tooltipWidth / 2,
+      Math.min(result.left, window.innerWidth - padding - tooltipWidth / 2)
+    );
+
+    // Clamp vertical position
+    result.top = Math.max(
+      padding + tooltipHeight / 2,
+      Math.min(result.top, window.innerHeight - padding - tooltipHeight / 2)
+    );
+
+    return result;
+  };
+
   if (!targetSelector || position === 'center') {
     // Center of viewport
     return {
@@ -140,31 +161,37 @@ export const getTooltipPosition = (
   const rect = element.getBoundingClientRect();
   const tooltipMargin = 16;
 
+  let result: { top: number; left: number; transformOrigin: string };
+
   switch (position) {
     case 'top':
-      return {
+      result = {
         top: rect.top - tooltipMargin,
         left: rect.left + rect.width / 2,
         transformOrigin: 'bottom center',
       };
+      break;
     case 'bottom':
-      return {
+      result = {
         top: rect.bottom + tooltipMargin,
         left: rect.left + rect.width / 2,
         transformOrigin: 'top center',
       };
+      break;
     case 'left':
-      return {
+      result = {
         top: rect.top + rect.height / 2,
         left: rect.left - tooltipMargin,
         transformOrigin: 'center right',
       };
+      break;
     case 'right':
-      return {
+      result = {
         top: rect.top + rect.height / 2,
         left: rect.right + tooltipMargin,
         transformOrigin: 'center left',
       };
+      break;
     default:
       return {
         top: window.innerHeight / 2,
@@ -172,4 +199,6 @@ export const getTooltipPosition = (
         transformOrigin: 'center center',
       };
   }
+
+  return clampPosition(result);
 };

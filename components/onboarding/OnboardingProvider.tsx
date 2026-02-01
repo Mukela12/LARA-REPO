@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { tutorialSteps, TutorialStep, ONBOARDING_KEY } from './tutorialSteps';
 import { TutorialOverlay } from './TutorialOverlay';
 
@@ -104,7 +105,10 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
   return (
     <OnboardingContext.Provider value={value}>
       {children}
-      {isActive && <TutorialOverlay />}
+      {isActive && typeof document !== 'undefined' && createPortal(
+        <TutorialOverlay />,
+        document.body
+      )}
     </OnboardingContext.Provider>
   );
 };

@@ -31,8 +31,25 @@ export const TutorialOverlay: React.FC = () => {
       setTooltipPosition(position);
     };
 
+    // First, scroll the target element into view
+    const scrollAndPosition = () => {
+      if (currentStepData.target) {
+        const element = document.querySelector(currentStepData.target);
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+          });
+        }
+      }
+
+      // Then calculate position after a short delay for scroll to complete
+      setTimeout(updatePosition, 300);
+    };
+
     // Small delay to ensure DOM is updated
-    const timer = setTimeout(updatePosition, 50);
+    const timer = setTimeout(scrollAndPosition, 50);
 
     // Also update on scroll/resize
     window.addEventListener('scroll', updatePosition, true);

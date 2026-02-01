@@ -27,8 +27,13 @@ router.get('/', authenticateTeacher, async (req: AuthenticatedRequest, res: Resp
           select: { sessions: true },
         },
         sessions: {
-          where: { isLive: true },
-          select: { id: true },
+          where: {
+            OR: [
+              { isLive: true },
+              { status: 'ACTIVE' }
+            ]
+          },
+          select: { id: true, status: true },
           take: 1,
         },
       },
@@ -62,7 +67,12 @@ router.get('/:taskId', authenticateTeacher, async (req: AuthenticatedRequest, re
       include: {
         folder: true,
         sessions: {
-          where: { isLive: true },
+          where: {
+            OR: [
+              { isLive: true },
+              { status: 'ACTIVE' }
+            ]
+          },
           take: 1,
         },
       },
@@ -82,7 +92,7 @@ router.get('/:taskId', authenticateTeacher, async (req: AuthenticatedRequest, re
 // Create new task
 router.post('/', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, prompt, successCriteria, universalExpectations, folderId } = req.body;
+    const { title, prompt, successCriteria, universalExpectations, folderId, imageUrl, fileType } = req.body;
 
     if (!title || !prompt || !successCriteria || !Array.isArray(successCriteria)) {
       return res.status(400).json({ error: 'Title, prompt, and successCriteria are required' });
@@ -107,6 +117,8 @@ router.post('/', authenticateTeacher, async (req: AuthenticatedRequest, res: Res
         universalExpectations: universalExpectations ?? true,
         taskCode,
         folderId: folderId || null,
+        imageUrl: imageUrl || null,
+        fileType: fileType || null,
       },
     });
 
@@ -121,7 +133,7 @@ router.post('/', authenticateTeacher, async (req: AuthenticatedRequest, res: Res
 router.patch('/:taskId', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const taskId = req.params.taskId as string;
-    const { title, prompt, successCriteria, universalExpectations } = req.body;
+    const { title, prompt, successCriteria, universalExpectations, imageUrl, fileType } = req.body;
 
     const task = await prisma.task.findFirst({
       where: {
@@ -141,6 +153,8 @@ router.patch('/:taskId', authenticateTeacher, async (req: AuthenticatedRequest, 
         ...(prompt && { prompt }),
         ...(successCriteria && { successCriteria }),
         ...(universalExpectations !== undefined && { universalExpectations }),
+        ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
+        ...(fileType !== undefined && { fileType: fileType || null }),
       },
     });
 

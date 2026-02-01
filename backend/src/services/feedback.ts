@@ -96,7 +96,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
       "target": "specific part of work",
       "successIndicator": "what success looks like",
       "reflectionPrompt": "Question for student thinking, e.g., 'What evidence could strengthen this?'",
-      "ctaText": "≤30 chars for button",
+      "ctaText": "≤40 chars for button",
       "actionType": "revise" | "improve_section" | "reupload" | "rehearse"
     }
   ]
@@ -191,7 +191,7 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
   // Normalize nextSteps: ensure ctaText length and reflectionPrompt
   data.nextSteps = data.nextSteps.map((step: any) => ({
     ...step,
-    ctaText: step.ctaText?.slice(0, 30) || 'Continue',
+    ctaText: step.ctaText?.slice(0, 40) || 'Continue',
     reflectionPrompt: step.reflectionPrompt || 'What will you try differently?',
   }));
 
@@ -212,6 +212,63 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
   }
 
   return data as FeedbackSession;
+}
+
+/**
+ * Detect if a revision aligns with the chosen next step
+ */
+export async function detectRevisionAlignment(
+  originalContent: string,
+  revisedContent: string,
+  chosenNextStep: { actionVerb: string; target: string; successIndicator: string }
+): Promise<'aligned' | 'uncertain'> {
+  try {
+    const systemPrompt = `You are analyzing a student revision to determine if it addresses the recommended next step.
+
+CRITICAL: Respond with ONLY a single word: "aligned" or "uncertain". No other text.
+
+## Context
+The student was given feedback with the following next step recommendation:
+- Action: ${chosenNextStep.actionVerb}
+- Target: ${chosenNextStep.target}
+- Success looks like: ${chosenNextStep.successIndicator}
+
+## Your Task
+Compare the original work with the revised work. Determine if the revision meaningfully addresses the next step.
+
+Answer "aligned" if:
+- The revision shows clear changes related to the target area
+- The changes reflect an attempt to follow the action verb (e.g., if "Add", something was added)
+- The revision moves toward the success indicator
+
+Answer "uncertain" if:
+- No meaningful changes were made
+- Changes are unrelated to the recommended next step
+- Cannot determine if the revision addresses the feedback`;
+
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 10,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: `ORIGINAL WORK:\n${originalContent}\n\n---\n\nREVISED WORK:\n${revisedContent}`,
+        },
+      ],
+    });
+
+    const textContent = message.content.find((block) => block.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      return 'uncertain';
+    }
+
+    const result = textContent.text.trim().toLowerCase();
+    return result === 'aligned' ? 'aligned' : 'uncertain';
+  } catch (error) {
+    console.error('Revision detection error:', error);
+    return 'uncertain';
+  }
 }
 
 export async function logAiUsage(

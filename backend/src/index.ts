@@ -8,6 +8,7 @@ import authRoutes from './routes/auth';
 import taskRoutes from './routes/tasks';
 import folderRoutes from './routes/folders';
 import sessionRoutes from './routes/sessions';
+import uploadRoutes from './routes/upload';
 import { validateDatabaseConnection, disconnectDatabase } from './lib/prisma';
 import { initializeSocket } from './lib/socket';
 
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

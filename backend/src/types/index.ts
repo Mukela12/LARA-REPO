@@ -72,6 +72,7 @@ export interface StudentSubmission {
   selectedNextStepId?: string;
   selectedNextStep?: NextStep;
   isRevision?: boolean;
+  detectionResult?: 'aligned' | 'uncertain'; // Revision alignment detection
 }
 
 // Tier configuration

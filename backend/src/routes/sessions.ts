@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { requireRedis, sessionKeys, SESSION_TTL } from '../lib/redis';
 import { authenticateTeacher, authenticateStudent } from '../middleware/auth';
-import { generateFeedback, logAiUsage, checkTeacherQuota } from '../services/feedback';
+import { generateFeedback, logAiUsage, checkTeacherQuota, detectRevisionAlignment } from '../services/feedback';
 import { AuthenticatedRequest, StudentSessionData, StudentSubmission } from '../types';
 import { emitToStudent, emitToSessionTeacher } from '../lib/socket';
 
@@ -121,6 +121,8 @@ router.get('/:sessionId/dashboard', authenticateTeacher, async (req: Authenticat
         task: session.task,
         startedAt: session.startedAt,
         isLive: session.isLive,
+        status: session.status,
+        classIdentifier: session.classIdentifier,
         dataPersisted: session.dataPersisted,
         dataExpiresAt: session.dataExpiresAt?.toISOString() || null,
       },
@@ -174,6 +176,25 @@ router.post('/:sessionId/submit', authenticateStudent, async (req: Authenticated
     }
     const student = JSON.parse(studentData) as StudentSessionData;
 
+    // Detect revision alignment if this is a revision with a selected next step
+    let detectionResult: 'aligned' | 'uncertain' | undefined;
+    if (revisionCount > 0 && existingSubmission?.content && existingSubmission?.selectedNextStepId && existingSubmission?.feedback?.nextSteps) {
+      const selectedNextStep = existingSubmission.feedback.nextSteps.find(
+        (step: any) => step.id === existingSubmission.selectedNextStepId
+      );
+      if (selectedNextStep) {
+        detectionResult = await detectRevisionAlignment(
+          existingSubmission.content,
+          content,
+          {
+            actionVerb: selectedNextStep.actionVerb,
+            target: selectedNextStep.target,
+            successIndicator: selectedNextStep.successIndicator,
+          }
+        );
+      }
+    }
+
     // Write submission to Redis (source of truth)
     const submission: StudentSubmission = {
       studentId,
@@ -185,6 +206,7 @@ router.post('/:sessionId/submit', authenticateStudent, async (req: Authenticated
       feedbackStatus: 'pending',
       validationWarnings: [],
       isRevision: revisionCount > 0,
+      detectionResult,
     };
 
     await redisClient.set(
@@ -225,6 +247,7 @@ router.post('/:sessionId/submit', authenticateStudent, async (req: Authenticated
             isRevision: revisionCount > 0,
             feedbackStatus: 'pending',
             validationWarnings: [],
+            detectionResult: detectionResult || null,
           },
         });
       });
@@ -435,6 +458,8 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
     const sessionId = req.params.sessionId as string;
     const studentId = req.params.studentId as string;
     const { isMastered } = req.body;
+    const teacherId = req.teacher!.id;
+    const approvedAt = new Date();
 
     const session = await prisma.taskSession.findFirst({
       where: {
@@ -500,11 +525,15 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
             data: { feedbackStatus: 'released' },
           });
 
-          // Update feedback mastery if exists
+          // Update feedback mastery and approval tracking if exists
           if (pgSubmission.feedback) {
             await tx.submissionFeedback.update({
               where: { id: pgSubmission.feedback.id },
-              data: { masteryAchieved: isMastered || pgSubmission.feedback.masteryAchieved },
+              data: {
+                masteryAchieved: isMastered || pgSubmission.feedback.masteryAchieved,
+                approvedBy: teacherId,
+                approvedAt: approvedAt,
+              },
             });
           }
 
@@ -527,7 +556,12 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
       });
     }
 
-    return res.json({ approved: true, releasedAt: Date.now() });
+    return res.json({
+      approved: true,
+      releasedAt: Date.now(),
+      approvedBy: teacherId,
+      approvedAt: approvedAt.toISOString(),
+    });
   } catch (error) {
     console.error('Approve feedback error:', error);
     return res.status(500).json({ error: 'Failed to approve feedback' });
@@ -769,6 +803,62 @@ router.post('/:sessionId/persist', authenticateTeacher, async (req: Authenticate
   } catch (error) {
     console.error('Persist session error:', error);
     return res.status(500).json({ error: 'Failed to persist session data' });
+  }
+});
+
+// Teacher removes a student from session
+router.delete('/:sessionId/students/:studentId', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId as string;
+    const studentId = req.params.studentId as string;
+
+    const session = await prisma.taskSession.findFirst({
+      where: {
+        id: sessionId,
+        teacherId: req.teacher!.id,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Require Redis for live session operations
+    const redisClient = requireRedis();
+
+    // Get student data from Redis
+    const studentData = await redisClient.hget(sessionKeys.students(sessionId), studentId);
+    if (!studentData) {
+      return res.status(404).json({ error: 'Student not found in session' });
+    }
+
+    const student = JSON.parse(studentData) as StudentSessionData;
+
+    // Update student status to 'removed' in Redis
+    student.status = 'removed' as any;
+    await redisClient.hset(sessionKeys.students(sessionId), studentId, JSON.stringify(student));
+
+    // Remove submission from Redis (optional - keep for audit trail)
+    // await redisClient.del(sessionKeys.submission(sessionId, studentId));
+
+    // Emit WebSocket event to notify the student they've been removed
+    emitToStudent(studentId, 'student-removed', {
+      studentId,
+      message: 'You have been removed from this session by your teacher.',
+    });
+
+    // If session has persistence enabled, also update Postgres
+    if (session.dataPersisted) {
+      await prisma.student.update({
+        where: { id: studentId },
+        data: { status: 'removed' },
+      });
+    }
+
+    return res.json({ removed: true });
+  } catch (error) {
+    console.error('Remove student error:', error);
+    return res.status(500).json({ error: 'Failed to remove student' });
   }
 });
 

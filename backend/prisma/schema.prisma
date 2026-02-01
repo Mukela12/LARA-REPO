@@ -14,20 +14,21 @@ enum SessionStatus {
 }
 
 model Teacher {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  name         String
-  schoolId     String?
-  tier         String        @default("starter")
-  aiCallsUsed  Int           @default(0)
-  aiCallsReset DateTime      @default(now())
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  passwordHash String?
-  usageLogs    AiUsageLog[]
-  folders      Folder[]
-  tasks        Task[]
-  sessions     TaskSession[]
+  id                  String        @id @default(uuid())
+  email               String        @unique
+  name                String
+  schoolId            String?
+  tier                String        @default("starter")
+  aiCallsUsed         Int           @default(0)
+  aiCallsReset        DateTime      @default(now())
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  passwordHash        String?
+  onboardingCompleted Boolean       @default(false)
+  usageLogs           AiUsageLog[]
+  folders             Folder[]
+  tasks               Task[]
+  sessions            TaskSession[]
 
   @@index([email])
 }

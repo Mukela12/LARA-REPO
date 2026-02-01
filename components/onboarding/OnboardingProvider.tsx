@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { tutorialSteps, TutorialStep, ONBOARDING_KEY } from './tutorialSteps';
 import { TutorialOverlay } from './TutorialOverlay';
+import { authApi, getToken } from '../../lib/api';
 
 interface OnboardingContextType {
   isActive: boolean;
@@ -24,22 +25,71 @@ interface OnboardingProviderProps {
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children }) => {
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
+  const [hasChecked, setHasChecked] = useState(false);
 
-  // Check localStorage on mount
+  // Check onboarding status on mount - from API if authenticated, localStorage as fallback
   useEffect(() => {
-    const completed = localStorage.getItem(ONBOARDING_KEY);
-    if (!completed) {
-      // Small delay to let the UI render first
-      const timer = setTimeout(() => {
-        setIsActive(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-    setHasCheckedStorage(true);
+    const checkOnboardingStatus = async () => {
+      const token = getToken();
+
+      if (token) {
+        // User is authenticated - check server status
+        try {
+          const profile = await authApi.getProfile();
+          if (!profile.onboardingCompleted) {
+            // Also check localStorage as a backup (in case they completed but API didn't save)
+            const localCompleted = localStorage.getItem(ONBOARDING_KEY);
+            if (localCompleted) {
+              // Sync to server
+              try {
+                await authApi.completeOnboarding();
+              } catch {
+                // Ignore sync errors
+              }
+            } else {
+              // Not completed - show tutorial after delay
+              setTimeout(() => setIsActive(true), 500);
+            }
+          }
+        } catch {
+          // API failed - fall back to localStorage
+          const completed = localStorage.getItem(ONBOARDING_KEY);
+          if (!completed) {
+            setTimeout(() => setIsActive(true), 500);
+          }
+        }
+      } else {
+        // Not authenticated - use localStorage only
+        const completed = localStorage.getItem(ONBOARDING_KEY);
+        if (!completed) {
+          setTimeout(() => setIsActive(true), 500);
+        }
+      }
+
+      setHasChecked(true);
+    };
+
+    checkOnboardingStatus();
   }, []);
 
   const currentStepData = isActive ? tutorialSteps[currentStep] : null;
+
+  // Mark onboarding as complete - save to both API and localStorage
+  const markComplete = useCallback(async () => {
+    // Always save to localStorage as fallback
+    localStorage.setItem(ONBOARDING_KEY, 'true');
+
+    // Try to save to server if authenticated
+    const token = getToken();
+    if (token) {
+      try {
+        await authApi.completeOnboarding();
+      } catch {
+        // Ignore API errors - localStorage is already set
+        console.warn('Failed to save onboarding status to server');
+      }
+    }
+  }, []);
 
   const startTutorial = useCallback(() => {
     setCurrentStep(0);
@@ -51,10 +101,10 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       setCurrentStep(prev => prev + 1);
     } else {
       // Complete the tutorial
-      localStorage.setItem(ONBOARDING_KEY, 'true');
+      markComplete();
       setIsActive(false);
     }
-  }, [currentStep]);
+  }, [currentStep, markComplete]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 0) {
@@ -63,14 +113,14 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
   }, [currentStep]);
 
   const skipTutorial = useCallback(() => {
-    localStorage.setItem(ONBOARDING_KEY, 'true');
+    markComplete();
     setIsActive(false);
-  }, []);
+  }, [markComplete]);
 
   const completeTutorial = useCallback(() => {
-    localStorage.setItem(ONBOARDING_KEY, 'true');
+    markComplete();
     setIsActive(false);
-  }, []);
+  }, [markComplete]);
 
   // Handle keyboard navigation
   useEffect(() => {

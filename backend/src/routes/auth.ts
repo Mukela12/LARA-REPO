@@ -307,6 +307,7 @@ router.get('/me', authenticateTeacher, async (req: AuthenticatedRequest, res: Re
         aiCallsUsed: true,
         aiCallsReset: true,
         createdAt: true,
+        onboardingCompleted: true,
       },
     });
 
@@ -352,6 +353,21 @@ router.patch('/me', authenticateTeacher, async (req: AuthenticatedRequest, res: 
   } catch (error) {
     console.error('Update profile error:', error);
     return res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Mark onboarding as completed
+router.post('/onboarding/complete', authenticateTeacher, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await prisma.teacher.update({
+      where: { id: req.teacher!.id },
+      data: { onboardingCompleted: true },
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Complete onboarding error:', error);
+    return res.status(500).json({ error: 'Failed to complete onboarding' });
   }
 });
 

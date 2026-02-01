@@ -93,6 +93,7 @@ export interface TeacherResponse {
   aiCallsUsed?: number;
   aiCallsLimit?: number;
   aiCallsRemaining?: number;
+  onboardingCompleted?: boolean;
 }
 
 export interface AuthResponse {
@@ -169,6 +170,11 @@ export const authApi = {
     apiFetch('/api/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  completeOnboarding: (): Promise<{ success: boolean }> =>
+    apiFetch('/api/auth/onboarding/complete', {
+      method: 'POST',
     }),
 
   validateCode: (taskCode: string): Promise<ValidateCodeResponse> =>

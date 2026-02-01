@@ -18,24 +18,38 @@ const PORT = process.env.PORT || 3001;
 // Parse allowed origins from environment (comma-separated) or use defaults
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
-  : ['http://localhost:5173'];
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
+console.log('Allowed CORS origins:', allowedOrigins);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
 
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`CORS blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
+      // Return false instead of throwing - this sends proper CORS rejection headers
+      callback(null, false);
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Explicit OPTIONS handler for preflight (as a fallback)
+app.options('*', cors());
+
 app.use(express.json());
 
 // Health check

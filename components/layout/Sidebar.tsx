@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, BarChart2, Settings, Users, PenTool, GraduationCap, List, LogOut, User } from 'lucide-react';
+import { BookOpen, BarChart2, Settings, Users, PenTool, List, LogOut, User } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -21,11 +21,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
   return (
     <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-slate-200 flex-col z-20">
       <div className="p-6 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-sm">
-                <GraduationCap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-slate-900 tracking-tight">LARA</span>
+        <div className="flex items-center gap-3">
+          <img src="/iceberg.png" alt="EDberg" className="w-10 h-10 object-contain" />
+          <span className="text-2xl tracking-wide font-logo font-extrabold text-navy-800">EDberg</span>
         </div>
       </div>
 
@@ -39,11 +37,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
               data-tutorial={item.id === 'create' ? 'create-task' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
                 isActive
-                  ? 'bg-brand-50 text-brand-700'
+                  ? 'bg-navy-800 text-white'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <item.icon className={`w-5 h-5 transition-colors ${isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+              <item.icon className={`w-5 h-5 transition-colors ${isActive ? 'text-gold-400' : 'text-slate-400 group-hover:text-slate-600'}`} />
               {item.label}
             </button>
           );
@@ -54,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
         {teacherName && (
           <div className="px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-gold-100 text-gold-600 flex items-center justify-center">
                 <User className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">

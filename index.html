@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>LARA - Formative Feedback Engine</title>
+    <title>EDberg Education - Formative Feedback Engine</title>
+    <link rel="icon" type="image/x-icon" href="/iceberg.ico">
     <!-- Note: Tailwind CDN used for demo purposes. For production, install Tailwind CSS properly. -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,19 +14,41 @@
           extend: {
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
+              logo: ['Cocogoose', 'Poppins', 'sans-serif'],
             },
             colors: {
               brand: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                500: '#0ea5e9',
-                600: '#0284c7',
-                700: '#0369a1',
+                50: '#f0f8fd',
+                100: '#dceef9',
+                200: '#b8ddf3',
+                300: '#94ccec',
+                400: '#6bb7e4',
+                500: '#6bb7e4',
+                600: '#4a9dd4',
+                700: '#3883b8',
+              },
+              navy: {
+                50: '#f0f2f5',
+                100: '#d9dde5',
+                500: '#1a2b4a',
+                600: '#0f1f3a',
+                700: '#0a1628',
+                800: '#06142f',
+                900: '#040d1f',
+              },
+              gold: {
+                50: '#faf8f3',
+                100: '#f5efe1',
+                200: '#ebe0c4',
+                300: '#dccfa3',
+                400: '#c8ae6a',
+                500: '#b89a52',
+                600: '#a0833f',
               },
               feedback: {
-                task: '#3b82f6', // Blue
-                process: '#10b981', // Green
-                selfReg: '#8b5cf6', // Purple
+                task: '#3b82f6',
+                process: '#10b981',
+                selfReg: '#8b5cf6',
               }
             }
           }
@@ -33,6 +56,21 @@
       }
     </script>
     <style>
+      /* Cocogoose Classic Trial Fonts */
+      @font-face {
+        font-family: 'Cocogoose';
+        src: url('/fonts/cocogoose-classic-trial/Cocogoose-Classic-ExtraBold-trial.ttf') format('truetype');
+        font-weight: 800;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Cocogoose';
+        src: url('/fonts/cocogoose-classic-trial/Cocogoose-Classic-Medium-trial.ttf') format('truetype');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
       html {
         scroll-behavior: smooth;
         -webkit-tap-highlight-color: transparent;
@@ -55,6 +93,22 @@
       }
       .animate-spin-slow {
         animation: spin-slow 3s linear infinite;
+      }
+      /* Floating Dot Animation */
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.4; }
+        50% { transform: translateY(-20px) rotate(180deg); opacity: 0.8; }
+      }
+      .animate-float {
+        animation: float 6s ease-in-out infinite;
+      }
+      .animate-float-delayed {
+        animation: float 8s ease-in-out infinite;
+        animation-delay: 2s;
+      }
+      .animate-float-slow {
+        animation: float 10s ease-in-out infinite;
+        animation-delay: 4s;
       }
     </style>
   <script type="importmap">

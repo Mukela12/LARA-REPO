@@ -1,28 +1,126 @@
 import React, { useState } from 'react';
-import { X, Key, Sliders, Info } from 'lucide-react';
+import { X, User, Lock, Info, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 
 interface SettingsModalProps {
   onClose: () => void;
+  teacherName: string;
+  teacherEmail: string;
+  tier: string;
+  aiCallsUsed: number;
+  aiCallsLimit: number;
+  onUpdateName: (name: string) => Promise<boolean>;
+  onChangePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('claude-3-5-sonnet-20241022');
+const tierLabels: Record<string, string> = {
+  starter: 'Starter Plan',
+  classroom: 'Classroom Plan',
+  school: 'School Plan',
+  district: 'District Plan',
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  onClose,
+  teacherName,
+  teacherEmail,
+  tier,
+  aiCallsUsed,
+  aiCallsLimit,
+  onUpdateName,
+  onChangePassword,
+}) => {
+  // Account info state
+  const [name, setName] = useState(teacherName);
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [nameSuccess, setNameSuccess] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handleUpdateName = async () => {
+    if (!name.trim() || name === teacherName) return;
+
+    setIsUpdatingName(true);
+    setNameError(null);
+    setNameSuccess(false);
+
+    try {
+      const success = await onUpdateName(name.trim());
+      if (success) {
+        setNameSuccess(true);
+        setTimeout(() => setNameSuccess(false), 3000);
+      } else {
+        setNameError('Failed to update name');
+      }
+    } catch (error) {
+      setNameError(error instanceof Error ? error.message : 'Failed to update name');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const success = await onChangePassword(currentPassword, newPassword);
+      if (success) {
+        setPasswordSuccess(true);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => setPasswordSuccess(false), 3000);
+      } else {
+        setPasswordError('Failed to change password');
+      }
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const usagePercentage = aiCallsLimit > 0 ? Math.min((aiCallsUsed / aiCallsLimit) * 100, 100) : 0;
+  const hasNameChanged = name.trim() !== teacherName && name.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-navy-800 px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Settings</h2>
-            <p className="text-sm text-slate-600">Configure your LARA preferences</p>
+            <h2 className="text-xl font-bold text-white">Settings</h2>
+            <p className="text-sm text-slate-300">Manage your account and preferences</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -30,68 +128,177 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* API Configuration */}
+          {/* Account Information */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Key className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-slate-900">API Configuration</h3>
+              <User className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-slate-900">Account Information</h3>
             </div>
             <Card>
               <div className="space-y-4">
+                {/* Name Field */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Anthropic API Key
+                    Name
                   </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Enter your Anthropic API key to enable LARA feedback generation
-                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleUpdateName}
+                      disabled={!hasNameChanged || isUpdatingName}
+                    >
+                      {isUpdatingName ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : nameSuccess ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        'Update'
+                      )}
+                    </Button>
+                  </div>
+                  {nameError && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> {nameError}
+                    </p>
+                  )}
+                  {nameSuccess && (
+                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Name updated successfully
+                    </p>
+                  )}
                 </div>
 
+                {/* Email Field (read-only) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Claude Model
+                    Email
                   </label>
-                  <select
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                    <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
-                  </select>
+                  <input
+                    type="email"
+                    value={teacherEmail}
+                    disabled
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Tier Badge & Credits */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-slate-700">Plan</span>
+                    <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-full">
+                      {tierLabels[tier] || tier}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-700">AI Credits</span>
+                      <span className="text-sm text-slate-600">
+                        {aiCallsUsed.toLocaleString()} / {aiCallsLimit.toLocaleString()} used
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2.5">
+                      <div
+                        className={`h-2.5 rounded-full transition-all ${
+                          usagePercentage >= 90
+                            ? 'bg-red-500'
+                            : usagePercentage >= 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${usagePercentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {(aiCallsLimit - aiCallsUsed).toLocaleString()} credits remaining this month
+                    </p>
+                  </div>
                 </div>
               </div>
             </Card>
           </div>
 
-          {/* Feedback Preferences */}
+          {/* Change Password */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Sliders className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-lg font-semibold text-slate-900">Feedback Preferences</h3>
+              <Lock className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-lg font-semibold text-slate-900">Change Password</h3>
             </div>
             <Card>
               <div className="space-y-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
-                  <span className="text-sm text-slate-700">Auto-approve feedback for trusted students</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
-                  <span className="text-sm text-slate-700">Include text anchors in feedback</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
-                  <span className="text-sm text-slate-700">Send email notifications on submission</span>
-                </label>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {passwordError && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" /> {passwordError}
+                  </p>
+                )}
+
+                {passwordSuccess && (
+                  <p className="text-sm text-emerald-600 flex items-center gap-1">
+                    <Check className="w-4 h-4" /> Password changed successfully
+                  </p>
+                )}
+
+                <Button
+                  variant="primary"
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+                  className="w-full"
+                >
+                  {isChangingPassword ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Changing Password...
+                    </>
+                  ) : (
+                    'Change Password'
+                  )}
+                </Button>
               </div>
             </Card>
           </div>
@@ -104,18 +311,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             </div>
             <Card className="bg-slate-50">
               <div className="space-y-2 text-sm text-slate-600">
-                <p><strong className="text-slate-900">LARA</strong> - Learning Assessment & Response Assistant</p>
-                <p>Version: 2.1 (Demo)</p>
-                <p>Built with Claude Code and React 18</p>
+                <p><strong className="text-slate-900">EDberg Education</strong> - Formative Feedback Engine</p>
+                <p>Version: 2.1</p>
               </div>
             </Card>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={onClose}>Save Changes</Button>
+        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex justify-end">
+          <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>

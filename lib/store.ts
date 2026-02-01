@@ -586,6 +586,18 @@ export function useAppStore(teacherId?: string) {
     // Local store doesn't use WebSocket updates
   };
 
+  // Remove a student from the session
+  const removeStudent = (studentId: string) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.filter(s => s.id !== studentId),
+      // Also remove their submission
+      submissions: Object.fromEntries(
+        Object.entries(prev.submissions).filter(([id]) => id !== studentId)
+      )
+    }));
+  };
+
   return {
     state,
     addTask,
@@ -616,5 +628,6 @@ export function useAppStore(teacherId?: string) {
     updateTaskLiveSessionId,
     addStudentFromWebSocket,
     updateStudentFromWebSocket,
+    removeStudent,
   };
 }

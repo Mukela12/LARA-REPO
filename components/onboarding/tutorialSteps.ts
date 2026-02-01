@@ -9,8 +9,8 @@ export interface TutorialStep {
 export const tutorialSteps: TutorialStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to LARA!',
-    description: 'LARA helps you create writing tasks, collect student submissions, and provide AI-powered feedback. Let\'s take a quick tour to get you started.',
+    title: 'Welcome to EDberg!',
+    description: 'EDberg helps you create writing tasks, collect student submissions, and provide AI-powered feedback. Let\'s take a quick tour to get you started.',
     target: null,
     position: 'center',
   },
@@ -27,6 +27,20 @@ export const tutorialSteps: TutorialStep[] = [
     description: 'Once you have a task, share this link with your students. They can join using the link or by entering the task code.',
     target: '[data-tutorial="share-task"]',
     position: 'top',
+  },
+  {
+    id: 'student-list',
+    title: 'Monitor Your Students',
+    description: 'As students join, they appear here. You can see their status at a glance - who has joined, submitted, or needs attention.',
+    target: '[data-tutorial="student-list"]',
+    position: 'left',
+  },
+  {
+    id: 'remove-student',
+    title: 'Remove Students',
+    description: 'Need to remove a student? Hover over their name and click the remove icon. Useful for removing test entries or mistakes.',
+    target: '[data-tutorial="remove-student"]',
+    position: 'bottom',
   },
   {
     id: 'generate-feedback',

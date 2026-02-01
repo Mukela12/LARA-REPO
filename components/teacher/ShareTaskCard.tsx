@@ -41,13 +41,13 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
       className={`rounded-xl border p-5 ${
         isDisabled
           ? 'bg-slate-50 border-slate-200 opacity-60'
-          : 'bg-gradient-to-br from-brand-50 to-white border-brand-200'
+          : 'bg-gradient-to-br from-gold-50 to-white border-gold-200'
       }`}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-          isDisabled ? 'bg-slate-200 text-slate-400' : 'bg-brand-100 text-brand-600'
+          isDisabled ? 'bg-slate-200 text-slate-400' : 'bg-gold-100 text-gold-600'
         }`}>
           <Share2 className="w-4 h-4" />
         </div>
@@ -80,7 +80,7 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : copied
               ? 'bg-emerald-500 text-white'
-              : 'bg-brand-600 text-white hover:bg-brand-700'
+              : 'bg-navy-800 text-white hover:bg-navy-900'
           }`}
         >
           <AnimatePresence mode="wait">
@@ -123,7 +123,7 @@ export const ShareTaskCard: React.FC<ShareTaskCardProps> = ({
           className={`flex-shrink-0 p-2 rounded-lg border transition-shadow ${
             isDisabled
               ? 'bg-slate-100 border-slate-200'
-              : 'bg-white border-slate-200 cursor-pointer hover:shadow-md hover:border-brand-300'
+              : 'bg-white border-slate-200 cursor-pointer hover:shadow-md hover:border-gold-300'
           }`}
           title={!isDisabled ? "Click to enlarge QR code" : undefined}
         >

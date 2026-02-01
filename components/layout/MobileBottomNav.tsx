@@ -29,13 +29,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ activeTab, onN
               <motion.div
                 whileTap={{ scale: 0.9 }}
                 className={`p-1.5 rounded-xl transition-colors ${
-                  isActive ? 'text-brand-600 bg-brand-50' : 'text-slate-400'
+                  isActive ? 'text-navy-800 bg-gold-100' : 'text-slate-400'
                 }`}
               >
                 <item.icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
               </motion.div>
               <span className={`text-[10px] font-medium mt-1 ${
-                isActive ? 'text-brand-600' : 'text-slate-500'
+                isActive ? 'text-navy-800' : 'text-slate-500'
               }`}>
                 {item.label}
               </span>

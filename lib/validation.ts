@@ -336,13 +336,13 @@ function checkCtaTooLong(feedback: FeedbackSession): FeedbackWarning[] {
   const warnings: FeedbackWarning[] = [];
 
   feedback.nextSteps.forEach((step, index) => {
-    if (step.ctaText && step.ctaText.length > 30) {
+    if (step.ctaText && step.ctaText.length > 40) {
       warnings.push({
         id: `cta-too-long-${index}`,
         type: 'cta_too_long',
         severity: 'soft',
         title: 'CTA Text Too Long',
-        description: `Button text is ${step.ctaText.length} characters. Should be ≤30 for mobile display.`,
+        description: `Button text is ${step.ctaText.length} characters. Should be ≤40 for mobile display.`,
         location: `Next Step #${index + 1}`,
         matchedText: step.ctaText,
       });

@@ -1,5 +1,7 @@
 export type FeedbackType = 'task' | 'process' | 'self_reg';
 
+export type SessionStatus = 'CREATED' | 'ACTIVE' | 'CLOSED';
+
 export type StudentStatus =
   | 'active'              // Student joined, hasn't submitted
   | 'ready_for_feedback'  // Student submitted, waiting for teacher to generate
@@ -34,6 +36,8 @@ export interface Task {
   status: 'active' | 'inactive';
   folderId?: string | null;
   liveSessionId?: string | null; // ID of active live session for this task
+  imageUrl?: string; // Optional image/PDF URL for the task
+  fileType?: 'image' | 'pdf'; // Type of attached file
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,7 +65,7 @@ export interface NextStep {
   target: string;
   successIndicator: string;
   reflectionPrompt?: string; // Promotes student agency
-  ctaText: string; // Max 30 chars
+  ctaText: string; // Max 40 chars
   actionType: 'revise' | 'improve_section' | 'reupload' | 'rehearse';
 }
 
@@ -71,6 +75,8 @@ export interface FeedbackSession {
   growthAreas: FeedbackItem[];
   nextSteps: NextStep[];
   masteryAchieved?: boolean;  // AI suggests mastery (all criteria met, no significant growth areas)
+  approvedBy?: string;        // teacherId who approved
+  approvedAt?: string;        // ISO timestamp of approval
 }
 
 export interface Submission {
@@ -88,6 +94,7 @@ export interface Submission {
   masteryConfirmed?: boolean;     // Teacher confirmed mastery
   feedbackStatus?: 'pending' | 'generated' | 'approved' | 'released'; // Backend feedback status
   validationWarnings?: string[];  // Backend validation warnings
+  detectionResult?: 'aligned' | 'uncertain'; // Revision alignment detection result
 }
 
 export interface ClassInsight {

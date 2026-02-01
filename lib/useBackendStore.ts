@@ -31,6 +31,7 @@ function taskResponseToTask(t: TaskResponse): Task {
     status: t.status,
     folderId: t.folderId,
     liveSessionId: t.liveSessionId,
+    imageUrl: t.imageUrl || undefined,
     createdAt: new Date(t.createdAt),
     updatedAt: new Date(t.updatedAt),
   };
@@ -112,6 +113,23 @@ export function useBackendStore(teacherId?: string) {
     loadData();
   }, [loadData]);
 
+  // Refresh credits from backend
+  const refreshCredits = useCallback(async () => {
+    try {
+      const usageResponse = await sessionsApi.getUsage();
+      setState(prev => ({
+        ...prev,
+        credits: {
+          used: usageResponse.used,
+          remaining: usageResponse.remaining,
+          monthlyLimit: usageResponse.limit,
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to refresh credits:', error);
+    }
+  }, []);
+
   // Load session dashboard data
   const loadSessionDashboard = useCallback(async (sessionId: string) => {
     try {
@@ -175,6 +193,8 @@ export function useBackendStore(teacherId?: string) {
         successCriteria: task.successCriteria,
         universalExpectations: task.universalExpectations,
         folderId: task.folderId,
+        imageUrl: task.imageUrl,
+        fileType: task.fileType,
       });
 
       const newTask = taskResponseToTask(response);
@@ -198,6 +218,8 @@ export function useBackendStore(teacherId?: string) {
         prompt: updates.prompt,
         successCriteria: updates.successCriteria,
         universalExpectations: updates.universalExpectations,
+        imageUrl: updates.imageUrl,
+        fileType: updates.fileType,
       });
 
       const updatedTask = taskResponseToTask(response);
@@ -326,6 +348,8 @@ export function useBackendStore(teacherId?: string) {
       if (result.results[0]?.success) {
         // Reload dashboard to get the feedback
         await loadSessionDashboard(state.currentSessionId);
+        // Explicitly refresh credits to ensure UI is up-to-date
+        await refreshCredits();
         return true;
       } else {
         // Revert status
@@ -359,6 +383,8 @@ export function useBackendStore(teacherId?: string) {
 
       // Reload dashboard to get the feedback
       await loadSessionDashboard(state.currentSessionId);
+      // Explicitly refresh credits to ensure UI is up-to-date
+      await refreshCredits();
 
       return {
         success: result.generated,
@@ -633,6 +659,18 @@ export function useBackendStore(teacherId?: string) {
     }));
   }, []);
 
+  // Remove a student from the session
+  const removeStudent = (studentId: string) => {
+    setState(prev => ({
+      ...prev,
+      students: prev.students.filter(s => s.id !== studentId),
+      // Also remove their submission
+      submissions: Object.fromEntries(
+        Object.entries(prev.submissions).filter(([id]) => id !== studentId)
+      )
+    }));
+  };
+
   return {
     state,
     addTask,
@@ -663,5 +701,7 @@ export function useBackendStore(teacherId?: string) {
     updateTaskLiveSessionId,
     addStudentFromWebSocket,
     updateStudentFromWebSocket,
+    removeStudent,
+    refreshCredits,
   };
 }

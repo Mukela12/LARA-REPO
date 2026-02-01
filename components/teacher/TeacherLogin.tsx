@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogIn, UserPlus, GraduationCap, Eye, EyeOff, AlertCircle, Shield, ArrowLeft } from 'lucide-react';
+import { LogIn, UserPlus, Eye, EyeOff, AlertCircle, Shield, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signUp, logIn } from '../../lib/auth';
 
@@ -145,28 +145,71 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 relative">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 relative overflow-hidden">
+      {/* Decorative Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* SVG Pattern */}
+        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            {/* Grid Pattern with L-shaped lines */}
+            <pattern id="login-grid-pattern" x="0" y="0" width="200" height="200" patternUnits="userSpaceOnUse">
+              {/* Vertical line */}
+              <line x1="100" y1="0" x2="100" y2="100" stroke="#6bb7e4" strokeWidth="1" opacity="0.3" />
+              {/* Horizontal line */}
+              <line x1="100" y1="100" x2="200" y2="100" stroke="#6bb7e4" strokeWidth="1" opacity="0.3" />
+              {/* L-shaped corner accent */}
+              <path d="M 0 50 L 0 0 L 50 0" fill="none" stroke="#6bb7e4" strokeWidth="1" opacity="0.2" />
+              <path d="M 150 200 L 200 200 L 200 150" fill="none" stroke="#6bb7e4" strokeWidth="1" opacity="0.2" />
+              {/* Decorative circles at intersections */}
+              <circle cx="100" cy="100" r="3" fill="#c8ae6a" opacity="0.4" />
+              <circle cx="0" cy="0" r="2" fill="#6bb7e4" opacity="0.3" />
+              <circle cx="200" cy="200" r="2" fill="#6bb7e4" opacity="0.3" />
+            </pattern>
+            {/* Radial gradient for fade mask */}
+            <radialGradient id="login-fade-mask" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
+              <stop offset="0%" stopColor="white" stopOpacity="0.6" />
+              <stop offset="60%" stopColor="white" stopOpacity="0.8" />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </radialGradient>
+            <mask id="login-vignette-mask">
+              <rect width="100%" height="100%" fill="url(#login-fade-mask)" />
+            </mask>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#login-grid-pattern)" mask="url(#login-vignette-mask)" />
+        </svg>
+
+        {/* Glow Orbs */}
+        <div className="absolute -top-20 -right-20 w-80 h-80 bg-gold-400/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-brand-400/20 rounded-full blur-3xl" />
+
+        {/* Floating Animated Dots */}
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-brand-400/40 rounded-full animate-float" />
+        <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-gold-400/30 rounded-full animate-float-delayed" />
+        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-brand-400/30 rounded-full animate-float-slow" />
+        <div className="absolute bottom-1/3 right-1/3 w-1.5 h-1.5 bg-gold-400/40 rounded-full animate-float" style={{ animationDelay: '3s' }} />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
         {/* Premium Card Container */}
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
           {/* Dark Branded Header */}
-          <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-brand-400 via-brand-600 to-slate-900"></div>
+          <div className="bg-navy-800 p-8 text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-brand-400 via-brand-600 to-navy-800"></div>
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className="w-20 h-20 bg-brand-500 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-2xl shadow-brand-500/50 relative z-10"
+              className="mx-auto mb-4 relative z-10"
             >
-              <GraduationCap className="w-12 h-12 text-white" />
+              <img src="/iceberg.png" alt="EDberg" className="w-20 h-20 mx-auto object-contain" />
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="text-2xl font-bold text-white mb-2 relative z-10"
+              className="text-2xl font-logo font-extrabold text-white mb-2 relative z-10"
             >
-              {isSignUp ? 'Create Account' : 'Welcome Back'}
+              EDberg Education
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 10 }}
@@ -174,7 +217,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
               transition={{ delay: 0.15 }}
               className="text-brand-100 text-sm font-medium tracking-wide opacity-80 relative z-10"
             >
-              {isSignUp ? 'Join LARA for Teachers' : 'Sign in to continue'}
+              {isSignUp ? 'Create your teacher account' : 'Sign in to continue'}
             </motion.p>
           </div>
 
@@ -334,7 +377,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
                     <p className="font-medium mb-1">Password Reset</p>
                     <p className="text-blue-600">
                       Please contact your school administrator or email{' '}
-                      <span className="font-medium">support@lara-edu.com</span> for assistance.
+                      <span className="font-medium">support@edberg-edu.com</span> for assistance.
                     </p>
                   </motion.div>
                 )}
@@ -414,7 +457,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
           {/* Footer */}
           <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
-              LARA v2.1 | Teacher Portal
+              EDberg Education v2.1 | Teacher Portal
             </p>
           </div>
         </div>

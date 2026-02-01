@@ -10,12 +10,12 @@ import { OnboardingProvider } from './components/onboarding/OnboardingProvider';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { FeedbackSession, NextStep, Student } from './types';
-import { GraduationCap, School } from 'lucide-react';
+import { School } from 'lucide-react';
 import { useAppStore } from './lib/store';
 import { useBackendStore } from './lib/useBackendStore';
 import { getCurrentTeacher, logOut, Teacher } from './lib/auth';
 import { getTaskFromCode } from './lib/taskCodes';
-import { authApi, setStudentToken, getStudentToken, sessionsApi, validateToken, clearToken, getToken } from './lib/api';
+import { authApi, setStudentToken, getStudentToken, sessionsApi, validateToken, clearToken, getToken, setToken } from './lib/api';
 import { useStudentSocket, useTeacherSocket, useTeacherGlobalSocket, FeedbackReadyPayload, StudentJoinedPayload, GlobalStudentJoinedPayload } from './lib/useSocket';
 import { playJoinSound, playSubmitSound } from './lib/sounds';
 
@@ -66,13 +66,14 @@ function App() {
     updateTaskLiveSessionId,
     addStudentFromWebSocket,
     updateStudentFromWebSocket,
+    removeStudent,
   } = store;
 
   // Student Local State
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
   const [studentTaskId, setStudentTaskId] = useState<string | null>(null); // Track which task student is working on
   const [studentSessionId, setStudentSessionId] = useState<string | null>(null); // Backend session ID
-  const [studentTask, setStudentTask] = useState<{id: string; title: string; prompt: string; successCriteria: string[]} | null>(null);
+  const [studentTask, setStudentTask] = useState<{id: string; title: string; prompt: string; successCriteria: string[]; imageUrl?: string | null; fileType?: 'image' | 'pdf' | null} | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(false); // Loading state for session restore
 
   // Teacher Review State
@@ -261,6 +262,8 @@ function App() {
             title: response.task.title,
             prompt: response.task.prompt,
             successCriteria: response.task.successCriteria,
+            imageUrl: response.task.imageUrl,
+            fileType: response.task.fileType,
           });
 
           // Add the student to the local store
@@ -488,6 +491,7 @@ function App() {
   const handleNavigateToReview = (studentId: string) => {
     setReviewingStudentId(studentId);
     setCurrentView('teacher_review');
+    window.scrollTo(0, 0); // Reset scroll on navigation
   };
 
   const handleBackFromReview = () => {
@@ -521,6 +525,33 @@ function App() {
     );
   }
 
+  // Handler for updating teacher name
+  const handleUpdateName = async (name: string): Promise<boolean> => {
+    try {
+      const result = await authApi.updateProfile({ name });
+      if (result.success) {
+        // Update local teacher state
+        setCurrentTeacher(prev => prev ? { ...prev, name: result.teacher.name } : null);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to update name:', error);
+      throw error;
+    }
+  };
+
+  // Handler for changing password
+  const handleChangePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const result = await authApi.changePassword(currentPassword, newPassword);
+      return result.success;
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      throw error;
+    }
+  };
+
   if (currentView === 'teacher_dashboard') {
     return (
       <OnboardingProvider>
@@ -529,6 +560,12 @@ function App() {
             onNavigate={setActiveTab}
             onExit={handleTeacherLogout}
             teacherName={currentTeacher?.name}
+            teacherEmail={currentTeacher?.email}
+            tier={currentTeacher?.tier}
+            aiCallsUsed={state.credits.used}
+            aiCallsLimit={state.credits.monthlyLimit}
+            onUpdateName={handleUpdateName}
+            onChangePassword={handleChangePassword}
             onLogout={handleTeacherLogout}
         >
             <TeacherDashboard
@@ -556,6 +593,21 @@ function App() {
                 onUpdateFolder={updateFolder}
                 onGenerateFeedback={generateFeedbackForStudent}
                 onGenerateFeedbackBatch={generateFeedbackBatch}
+                onRemoveStudent={async (studentId: string) => {
+                  try {
+                    // Call backend API to remove student
+                    const task = state.tasks.find(t => t.id === state.currentTaskId);
+                    if (task?.liveSessionId && isUsingBackend) {
+                      await sessionsApi.removeStudent(task.liveSessionId, studentId);
+                    }
+                    // Update local state
+                    removeStudent(studentId);
+                    return true;
+                  } catch (error) {
+                    console.error('Failed to remove student:', error);
+                    return false;
+                  }
+                }}
                 onSessionPersisted={() => {
                   // Reload session info after persisting
                   const task = state.tasks.find(t => t.id === state.currentTaskId);
@@ -647,6 +699,8 @@ function App() {
         title: studentTask.title,
         prompt: studentTask.prompt,
         successCriteria: studentTask.successCriteria,
+        imageUrl: studentTask.imageUrl || null,
+        fileType: studentTask.fileType || null,
         universalExpectations: true,
         status: 'active' as const,
         folderId: null,
@@ -702,8 +756,8 @@ function App() {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
           <Card className="max-w-md w-full p-8 text-center space-y-6">
-            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <GraduationCap className="w-10 h-10" />
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+              <img src="/iceberg.png" alt="EDberg" className="w-10 h-10 object-contain" />
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-slate-900">Task Complete!</h2>

@@ -109,6 +109,8 @@ export interface StudentJoinResponse {
     title: string;
     prompt: string;
     successCriteria: string[];
+    imageUrl?: string | null;
+    fileType?: 'image' | 'pdf' | null;
   };
 }
 
@@ -124,6 +126,8 @@ export interface StudentRestoreResponse {
     prompt: string;
     successCriteria: string[];
     status: 'active' | 'inactive';
+    imageUrl?: string | null;
+    fileType?: 'image' | 'pdf' | null;
   };
   feedbackReady: boolean;
   feedback?: FeedbackData;
@@ -155,6 +159,18 @@ export const authApi = {
   getProfile: (): Promise<TeacherResponse> =>
     apiFetch('/api/auth/me'),
 
+  updateProfile: (data: { name: string }): Promise<{ success: boolean; teacher: TeacherResponse }> =>
+    apiFetch('/api/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  changePassword: (currentPassword: string, newPassword: string): Promise<{ success: boolean }> =>
+    apiFetch('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   validateCode: (taskCode: string): Promise<ValidateCodeResponse> =>
     apiFetch('/api/auth/validate-code', {
       method: 'POST',
@@ -183,6 +199,8 @@ export interface TaskResponse {
   successCriteria: string[];
   status: 'active' | 'inactive';
   folderId: string | null;
+  imageUrl: string | null;
+  fileType?: 'image' | 'pdf' | null;
   createdAt: string;
   updatedAt: string;
   folder?: FolderResponse | null;
@@ -196,6 +214,8 @@ export interface CreateTaskRequest {
   successCriteria: string[];
   universalExpectations?: boolean;
   folderId?: string | null;
+  imageUrl?: string | null;
+  fileType?: 'image' | 'pdf' | null;
 }
 
 export const tasksApi = {
@@ -287,6 +307,7 @@ export interface StudentSubmission {
   validationWarnings: string[];
   isRevision: boolean;
   feedback?: FeedbackData;
+  detectionResult?: 'aligned' | 'uncertain';
 }
 
 export interface FeedbackData {
@@ -321,6 +342,8 @@ export interface DashboardResponse {
     task: TaskResponse;
     startedAt: string | null;
     isLive: boolean;
+    status: 'CREATED' | 'ACTIVE' | 'CLOSED';
+    classIdentifier?: string | null;
     dataPersisted: boolean;
     dataExpiresAt: string | null;
   };
@@ -396,6 +419,38 @@ export const sessionsApi = {
 
   persistSession: (sessionId: string): Promise<{ persisted: boolean; studentCount?: number; message?: string }> =>
     apiFetch(`/api/sessions/${sessionId}/persist`, { method: 'POST' }),
+
+  removeStudent: (sessionId: string, studentId: string): Promise<{ removed: boolean }> =>
+    apiFetch(`/api/sessions/${sessionId}/students/${studentId}`, { method: 'DELETE' }),
+};
+
+// ==================== Upload API ====================
+
+export interface UploadResponse {
+  url: string;
+  publicId: string;
+  fileType?: 'image' | 'pdf';
+}
+
+export const uploadApi = {
+  uploadImage: async (file: File): Promise<UploadResponse> => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/api/upload/image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  },
 };
 
 // Export API base URL for debugging

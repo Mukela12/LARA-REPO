@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Task, FeedbackSession } from '../../types';
-import { User, BookOpen, Clock, Send, AlertCircle, RefreshCw, KeyRound, Loader2 } from 'lucide-react';
+import { User, BookOpen, Clock, Send, AlertCircle, RefreshCw, KeyRound, Loader2, FileText, ExternalLink, CheckCircle } from 'lucide-react';
 import { authApi } from '../../lib/api';
 
 interface StudentEntryProps {
@@ -44,6 +44,8 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
   const [content, setContent] = useState('');
   const [codeError, setCodeError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [attachmentLoading, setAttachmentLoading] = useState(true);
+  const [attachmentError, setAttachmentError] = useState(false);
 
   // Timer state
   const [timeElapsed, setTimeElapsed] = useState(0);
@@ -75,6 +77,21 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
       }
     };
   }, [phase]);
+
+  // Track previous imageUrl to avoid unnecessary reloads
+  const prevImageUrlRef = useRef<string | undefined>(undefined);
+
+  // Reset attachment loading only when imageUrl ACTUALLY changes (not just object reference)
+  useEffect(() => {
+    if (task?.imageUrl && task?.fileType !== 'pdf') {
+      // Only reset if URL actually changed, not just object reference
+      if (task.imageUrl !== prevImageUrlRef.current) {
+        setAttachmentLoading(true);
+        setAttachmentError(false);
+        prevImageUrlRef.current = task.imageUrl;
+      }
+    }
+  }, [task?.imageUrl, task?.fileType]);
 
   // Format time for display
   const formatTime = (seconds: number): string => {
@@ -130,14 +147,14 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
   // Phase 1: Enter PIN (Kahoot-style)
   if (phase === 'enter_pin') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-400 to-navy-800 p-4">
         <Card className="max-w-md w-full p-8 space-y-6">
           <div className="text-center">
-            <div className="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gold-100 text-gold-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <KeyRound className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">LARA</h1>
-            <p className="text-slate-500 text-sm mt-1">Enter Learning PIN</p>
+            <h1 className="text-2xl font-logo font-extrabold text-navy-800">EDberg</h1>
+            <p className="text-slate-500 text-sm mt-1">Enter your code</p>
           </div>
 
           <form onSubmit={handleValidateCode} className="space-y-4">
@@ -147,7 +164,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
                 required
                 type="text"
                 className="w-full px-4 py-4 text-center text-2xl font-mono font-bold tracking-widest border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none uppercase"
-                placeholder="ABC123"
+                placeholder="9A01"
                 value={taskCode}
                 onChange={(e) => {
                   setTaskCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
@@ -163,7 +180,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
               type="submit"
               className="w-full h-14 text-lg font-bold"
               size="lg"
-              disabled={taskCode.length < 6 || isValidating}
+              disabled={taskCode.length < 4 || isValidating}
             >
               {isValidating ? (
                 <>
@@ -177,37 +194,24 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
           </form>
 
           <p className="text-xs text-slate-400 text-center">
-            Ask your teacher for the 6-character Learning PIN
+            Enter the code your teacher gave you (for example: 9A01)
           </p>
         </Card>
       </div>
     );
   }
 
-  // Phase 2: Enter Name (shows task title only, not prompt)
+  // Phase 2: Enter Name (Kahoot-style - no task content revealed)
   if (phase === 'enter_name') {
-    const displayTitle = validatedTaskTitle || task?.title || 'Learning Task';
-
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="max-w-md w-full p-8 space-y-6">
           <div className="text-center">
-            <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-6 h-6" />
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">Join Session</h2>
-            <p className="text-slate-500 text-sm mt-1">Enter your name to continue</p>
-          </div>
-
-          {/* Show task title only (not prompt) */}
-          <div className="bg-brand-50 border border-brand-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <BookOpen className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-brand-900">{displayTitle}</p>
-                <p className="text-xs text-brand-600 mt-1">Your teacher is ready for you</p>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-slate-900">Found it!</h2>
+            <p className="text-slate-500 text-sm mt-1">Your teacher is ready for you</p>
           </div>
 
           <form onSubmit={handleJoin} className="space-y-4">
@@ -294,7 +298,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
 
   // Phase 3: Writing (full task revealed)
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-slate-50 pb-36">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 py-3 shadow-sm">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -306,10 +310,10 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
 
           {/* Timer Display */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex items-center gap-2 bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-200">
-              <Clock className="w-4 h-4 text-brand-600" />
+            <div className="flex items-center gap-2 bg-gold-50 px-3 py-1.5 rounded-lg border border-gold-200">
+              <Clock className="w-4 h-4 text-gold-600" />
               <div className="text-right">
-                <div className="text-base font-bold text-brand-700 font-mono leading-none">
+                <div className="text-base font-bold text-gold-700 font-mono leading-none">
                   {formatTime(timeElapsed)}
                 </div>
               </div>
@@ -345,6 +349,77 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
         <div className="bg-brand-50 border border-brand-100 rounded-xl p-5">
           <h3 className="text-sm font-bold text-brand-800 uppercase tracking-wide mb-2">Prompt</h3>
           <p className="text-slate-800 leading-relaxed">{task?.prompt || 'Loading...'}</p>
+
+          {/* Task Attachment (Image or PDF) */}
+          {task?.imageUrl && (
+            <div className="mt-4">
+              {task.fileType === 'pdf' ? (
+                <a
+                  href={task.imageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="flex items-center gap-3 p-4 bg-white border border-brand-200 rounded-lg hover:bg-brand-50 hover:border-brand-300 transition-all shadow-sm"
+                >
+                  <div className="p-2.5 bg-red-100 rounded-lg">
+                    <FileText className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">View Task Document</p>
+                    <p className="text-xs text-slate-500">Click to download PDF</p>
+                  </div>
+                  <ExternalLink className="w-5 h-5 text-brand-500 flex-shrink-0" />
+                </a>
+              ) : (
+                <div className="relative">
+                  {/* Loading skeleton */}
+                  {attachmentLoading && !attachmentError && (
+                    <div className="w-full h-48 bg-slate-200 animate-pulse rounded-lg flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+                    </div>
+                  )}
+
+                  {/* Error state with retry */}
+                  {attachmentError && (
+                    <div className="flex flex-col items-center gap-3 p-6 bg-red-50 border border-red-200 rounded-lg">
+                      <AlertCircle className="w-8 h-8 text-red-400" />
+                      <p className="text-sm text-red-700">Failed to load image</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setAttachmentError(false);
+                          setAttachmentLoading(true);
+                        }}
+                        className="text-red-600 border-red-300"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Actual image - hidden while loading, hidden on error */}
+                  <img
+                    src={task.imageUrl}
+                    alt="Task reference image"
+                    className={`max-w-full max-h-80 w-auto mx-auto rounded-lg border border-brand-200 shadow-sm object-contain transition-opacity ${
+                      attachmentLoading || attachmentError ? 'absolute opacity-0 h-0' : 'opacity-100'
+                    }`}
+                    onLoad={() => {
+                      setAttachmentLoading(false);
+                      setAttachmentError(false);
+                    }}
+                    onError={() => {
+                      setAttachmentLoading(false);
+                      setAttachmentError(true);
+                      console.error('Failed to load task image:', task.imageUrl);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -356,50 +431,50 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             onChange={(e) => setContent(e.target.value)}
           />
         </div>
-
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-20">
-          <div className="max-w-2xl mx-auto space-y-2">
-            {/* Character Counter */}
-            <div className="flex items-center justify-between text-sm px-1">
-              <div className="flex items-center gap-2">
-                {content.length >= 10 ? (
-                  <>
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span className="text-emerald-600 font-medium">
-                      Ready to submit!
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-500">
-                      {10 - content.length} more characters needed
-                    </span>
-                  </>
-                )}
-              </div>
-              <span className="text-slate-400 font-mono text-xs">
-                {content.length} characters
-              </span>
-            </div>
-
-            {/* Enhanced Submit Button */}
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button
-                onClick={handleSubmit}
-                className="w-full h-14 text-lg font-bold shadow-xl shadow-brand-500/30"
-                disabled={content.length < 10}
-              >
-                <Send className="w-5 h-5 mr-2" />
-                {content.length >= 10 ? 'Submit for Feedback!' : `Write ${10 - content.length} more...`}
-              </Button>
-            </motion.div>
-          </div>
-        </div>
       </main>
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-20">
+        <div className="max-w-2xl mx-auto space-y-2">
+          {/* Character Counter */}
+          <div className="flex items-center justify-between text-sm px-1">
+            <div className="flex items-center gap-2">
+              {content.length >= 10 ? (
+                <>
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                  <span className="text-emerald-600 font-medium">
+                    Ready to submit!
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-500">
+                    {10 - content.length} more characters needed
+                  </span>
+                </>
+              )}
+            </div>
+            <span className="text-slate-400 font-mono text-xs">
+              {content.length} characters
+            </span>
+          </div>
+
+          {/* Enhanced Submit Button */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Button
+              onClick={handleSubmit}
+              className="w-full h-14 text-lg font-bold shadow-xl shadow-navy-800/30"
+              disabled={content.length < 10}
+            >
+              <Send className="w-5 h-5 mr-2" />
+              {content.length >= 10 ? 'Submit for Feedback!' : `Write ${10 - content.length} more...`}
+            </Button>
+          </motion.div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -17,7 +17,7 @@ export const GoalBox: React.FC<GoalBoxProps> = ({ goalText, universal = false })
           className="flex items-start gap-3 cursor-pointer group"
           onClick={() => setIsExpanded(!isExpanded)}
         >
-          <div className="mt-0.5 p-1.5 bg-brand-50 rounded-full text-brand-600">
+          <div className="mt-0.5 p-1.5 bg-navy-100 rounded-full text-navy-800">
             <Target className="w-4 h-4" />
           </div>
           <div className="flex-1">

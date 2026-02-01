@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ClassInsight, Student, Task, Submission, Folder, TeacherCredits } from '../../types';
-import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil } from 'lucide-react';
+import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil, UserMinus, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CreateTaskForm } from './CreateTaskForm';
@@ -48,6 +48,7 @@ interface TeacherDashboardProps {
   onGenerateFeedback: (studentId: string) => Promise<boolean>;
   onGenerateFeedbackBatch: (studentIds: string[]) => Promise<{ success: number; failed: number }>;
   onSessionPersisted?: () => void;
+  onRemoveStudent?: (studentId: string) => Promise<boolean>;
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
@@ -75,12 +76,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onUpdateFolder,
   onGenerateFeedback,
   onGenerateFeedbackBatch,
-  onSessionPersisted
+  onSessionPersisted,
+  onRemoveStudent
 }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [generatingStudentId, setGeneratingStudentId] = useState<string | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [studentToRemove, setStudentToRemove] = useState<Student | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const currentTask = tasks.find(t => t.id === selectedTaskId) || tasks[0];
 
   // Filter students to show those with submissions OR active students for this task
@@ -108,7 +112,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         submitted: "bg-blue-100 text-blue-700",
         feedback_ready: "bg-emerald-100 text-emerald-700",
         revising: "bg-amber-100 text-amber-700",
-        completed: "bg-slate-800 text-white",
+        completed: "bg-gradient-to-r from-gold-400 to-gold-500 text-navy-800",
     };
     const labels: Record<string, string> = {
         active: "Writing",
@@ -145,6 +149,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
   // Count students ready for feedback
   const readyForFeedbackCount = taskStudents.filter(s => s.status === 'ready_for_feedback').length;
+
+  // Handle removing a student
+  const handleRemoveStudent = async () => {
+    if (!studentToRemove || !onRemoveStudent) return;
+    setIsRemoving(true);
+    try {
+      await onRemoveStudent(studentToRemove.id);
+      setStudentToRemove(null);
+    } catch (error) {
+      console.error('Failed to remove student:', error);
+    } finally {
+      setIsRemoving(false);
+    }
+  };
 
   if (activeTab === 'create' || editingTask) {
     return (
@@ -442,14 +460,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </Card>
 
         {/* Credits Display */}
-        <Card className="border-slate-200">
-             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Feedback Credits</h3>
+        <Card className="border-gold-200 bg-gradient-to-br from-gold-50 to-white">
+             <h3 className="text-xs font-semibold text-gold-700 uppercase tracking-wide mb-1">Feedback Credits</h3>
              <div className="flex items-end justify-between mt-2">
                  <div>
-                   <span className="text-2xl font-bold text-slate-900">{credits.remaining}</span>
-                   <span className="text-sm text-slate-500 ml-1">remaining</span>
+                   <span className="text-2xl font-bold text-navy-800">{credits.remaining}</span>
+                   <span className="text-sm text-gold-600 ml-1">remaining</span>
                  </div>
-                 <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                 <span className="text-xs text-gold-700 bg-gold-100 px-2 py-1 rounded font-medium">
                    {credits.used} used
                  </span>
              </div>
@@ -462,9 +480,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       </div>
 
       {/* Learner List */}
-      <Card noPadding>
-          <div className="px-6 py-4 border-b border-slate-100 bg-white">
-            <h3 className="font-semibold text-slate-900">Learner Progress</h3>
+      <Card noPadding data-tutorial="student-list">
+          <div className="px-6 py-4 border-b border-slate-100 bg-navy-800">
+            <h3 className="font-semibold text-white">Learner Progress</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -483,9 +501,22 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      taskStudents.map(student => (
-                        <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-slate-900">{student.name}</td>
+                      taskStudents.map((student, index) => (
+                        <tr key={student.id} className="hover:bg-slate-50 transition-colors group" data-tutorial={index === 0 ? "remove-student" : undefined}>
+                            <td className="px-6 py-4 font-medium text-slate-900">
+                              <div className="flex items-center gap-2">
+                                {student.name}
+                                {onRemoveStudent && (
+                                  <button
+                                    onClick={() => setStudentToRemove(student)}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                    title="Remove Learner"
+                                  >
+                                    <UserMinus className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-6 py-4"><StatusBadge status={student.status} /></td>
                             <td className="px-6 py-4 text-right">
                                 {student.status === 'ready_for_feedback' && (
@@ -545,6 +576,57 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </table>
           </div>
       </Card>
+
+      {/* Remove Learner Confirmation Modal */}
+      {studentToRemove && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <UserMinus className="w-5 h-5 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Remove Learner</h3>
+              </div>
+              <button
+                onClick={() => setStudentToRemove(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-slate-600">
+              Remove <span className="font-semibold">{studentToRemove.name}</span>? This learner will be removed but can rejoin with another name.
+            </p>
+            <div className="flex gap-3 justify-end pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStudentToRemove(null)}
+                disabled={isRemoving}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleRemoveStudent}
+                disabled={isRemoving}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isRemoving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  'Remove'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

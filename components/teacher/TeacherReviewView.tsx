@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Sparkles, Loader2, MoreHorizontal } from 'lucide-react';
 import { Student, Submission, FeedbackSession, Task } from '../../types';
 import { FeedbackEditForm } from './FeedbackEditForm';
 import { FeedbackWarnings } from './FeedbackWarnings';
 import { validateFeedback, FeedbackWarning } from '../../lib/validation';
+import { useScrollDirection } from '../../lib/useScrollDirection';
 
 interface TeacherReviewViewProps {
   student: Student;
@@ -30,6 +32,22 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
   const [showPreviousContent, setShowPreviousContent] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(new Set());
+
+  // Collapsible header state
+  const isHeaderCollapsed = useScrollDirection(10);
+  const [showMoreActions, setShowMoreActions] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowMoreActions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Mastery toggle - initialize from AI suggestion
   const aiSuggestsMastery = submission.feedback?.masteryAchieved ?? false;
@@ -107,111 +125,181 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header - Redesigned with 3-row layout */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      {/* Collapsible Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 border-t-4 border-t-navy-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Row 1: Navigation + Title */}
-          <div className="flex items-center gap-4 py-4 border-b border-slate-100">
-            <button
-              onClick={onBack}
-              className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-xl font-semibold text-slate-900">Review Feedback</h1>
-          </div>
-
-          {/* Row 2: Student Info Bar */}
-          <div className="flex items-center justify-between py-3">
-            {/* Left: Student identity */}
+          {/* Top Bar - Always Visible */}
+          <div className="flex items-center justify-between h-14">
+            {/* Left: Back + Student Name */}
             <div className="flex items-center gap-3">
-              <span className="text-base font-medium text-slate-900">{student.name}</span>
+              <button
+                onClick={onBack}
+                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <span className="font-medium text-slate-900 truncate text-base">{student.name}</span>
               {isRevision && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-purple-100 text-purple-700 border border-purple-200 rounded-full text-xs font-semibold">
-                  Revision #{submission.revisionCount}
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                  Rev #{submission.revisionCount}
                 </span>
               )}
             </div>
 
-            {/* Right: Metadata */}
-            {submission.timeElapsed && (
-              <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                <Clock className="w-4 h-4" />
-                <span>{formatTime(submission.timeElapsed)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Row 3: Actions */}
-          <div className="flex items-center justify-between py-3 border-t border-slate-100">
-            {/* Left: Secondary Actions */}
+            {/* Right: Compact Dropdown (when collapsed) + Mastery Toggle + Approve */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRegenerate}
-                disabled={isRegenerating}
-                className="text-slate-600"
-              >
-                {isRegenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    Regenerating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-1.5" />
-                    Regenerate
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsEditing(true)}
-                className="text-slate-600"
-              >
-                <Edit2 className="w-4 h-4 mr-1.5" />
-                Edit
-              </Button>
-              <span className="text-xs text-slate-400 ml-1">1 credit</span>
-            </div>
+              {/* Compact Actions Dropdown - Only visible when collapsed */}
+              <AnimatePresence>
+                {isHeaderCollapsed && (
+                  <motion.div
+                    ref={dropdownRef}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.15 }}
+                    className="relative"
+                  >
+                    <button
+                      onClick={() => setShowMoreActions(!showMoreActions)}
+                      className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
 
-            {/* Right: Primary Actions */}
-            <div className="flex items-center gap-3">
-              {/* Simplified Mastery Toggle */}
-              <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                    {/* Dropdown Menu */}
+                    <AnimatePresence>
+                      {showMoreActions && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px] z-20"
+                        >
+                          <button
+                            onClick={() => {
+                              handleRegenerate();
+                              setShowMoreActions(false);
+                            }}
+                            disabled={isRegenerating}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            {isRegenerating ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsEditing(true);
+                              setShowMoreActions(false);
+                            }}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Edit
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Mastery Toggle */}
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={markAsMastered}
                   onChange={(e) => setMarkAsMastered(e.target.checked)}
                   className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
-                <span className={`text-sm font-medium ${markAsMastered ? 'text-emerald-700' : 'text-slate-600'}`}>
+                <span className={`text-xs font-medium hidden sm:inline ${markAsMastered ? 'text-emerald-700' : 'text-slate-500'}`}>
                   Mastered
                 </span>
                 {aiSuggestsMastery && (
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" title="AI Suggested" />
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500 hidden sm:block" title="AI Suggested" />
                 )}
               </label>
 
-              {/* Primary Approve Button */}
+              {/* Approve Button */}
               <Button
-                variant="primary"
-                size="md"
+                variant={markAsMastered ? 'gold' : 'primary'}
+                size="sm"
                 onClick={() => onApprove(student.id, markAsMastered)}
-                className={markAsMastered ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                className="whitespace-nowrap"
               >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Approve & Send
+                <CheckCircle className="w-3.5 h-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Approve & Send</span>
               </Button>
             </div>
           </div>
+
+          {/* Collapsible Section: Title Row + Actions Row */}
+          <AnimatePresence initial={false}>
+            {!isHeaderCollapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="overflow-hidden"
+              >
+                {/* Title Row */}
+                <div className="flex items-center gap-4 py-2 border-t border-slate-100">
+                  <h1 className="text-lg font-semibold text-slate-900">Review Feedback</h1>
+                  {submission.timeElapsed && (
+                    <div className="flex items-center gap-1.5 text-sm text-slate-500 ml-auto">
+                      <Clock className="w-4 h-4" />
+                      <span>{formatTime(submission.timeElapsed)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions Row */}
+                <div className="flex items-center justify-between py-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRegenerate}
+                      disabled={isRegenerating}
+                      className="text-slate-600"
+                    >
+                      {isRegenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-1.5" />
+                          Regenerate
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                      className="text-slate-600"
+                    >
+                      <Edit2 className="w-4 h-4 mr-1.5" />
+                      Edit
+                    </Button>
+                    <span className="text-xs text-slate-400 ml-1">1 credit</span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
       {/* Two-Column Layout */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Student's Work */}
           <div className="space-y-4">
@@ -301,7 +389,7 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">
-                    LARA-Generated Feedback
+                    EDberg-Generated Feedback
                   </h2>
                   <Badge variant="green">Ready to Review</Badge>
                 </div>

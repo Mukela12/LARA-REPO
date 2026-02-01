@@ -2,6 +2,7 @@ import { FeedbackSession, FeedbackItem, NextStep } from '../types';
 
 export type WarningSeverity = 'strong' | 'soft';
 
+
 export interface FeedbackWarning {
   id: string;
   type: 'ability_praise' | 'peer_comparison' | 'invented_criteria' | 'vague_comment' | 'missing_feedback_types' | 'low_specificity' | 'missing_anchors' | 'excessive_feedback_count' | 'missing_reflection' | 'no_strengths' | 'cta_too_long';

@@ -180,6 +180,16 @@ export function useBackendStore(teacherId?: string) {
       return dashboard;
     } catch (error) {
       console.error('Failed to load session dashboard:', error);
+      // Return null for "not found" errors (session expired/deleted)
+      if (error instanceof Error && error.message.includes('not found')) {
+        setState(prev => ({
+          ...prev,
+          students: [],
+          submissions: {},
+          currentSessionId: null,
+        }));
+        return null;
+      }
       throw error;
     }
   }, []);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, User, Lock, Info, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { useNotification } from '../../lib/useNotification';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -31,10 +32,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateName,
   onChangePassword,
 }) => {
+  const notify = useNotification();
+
   // Account info state
   const [name, setName] = useState(teacherName);
   const [isUpdatingName, setIsUpdatingName] = useState(false);
-  const [nameSuccess, setNameSuccess] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
 
   // Password state
@@ -42,7 +44,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const handleUpdateName = async () => {
@@ -50,13 +51,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setIsUpdatingName(true);
     setNameError(null);
-    setNameSuccess(false);
 
     try {
       const success = await onUpdateName(name.trim());
       if (success) {
-        setNameSuccess(true);
-        setTimeout(() => setNameSuccess(false), 3000);
+        notify.success('Name Updated', 'Your display name has been changed.');
       } else {
         setNameError('Failed to update name');
       }
@@ -69,7 +68,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleChangePassword = async () => {
     setPasswordError(null);
-    setPasswordSuccess(false);
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordError('All fields are required');
@@ -91,11 +89,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const success = await onChangePassword(currentPassword, newPassword);
       if (success) {
-        setPasswordSuccess(true);
+        notify.success('Password Changed', 'Your password has been updated successfully.');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
-        setTimeout(() => setPasswordSuccess(false), 3000);
       } else {
         setPasswordError('Failed to change password');
       }
@@ -156,8 +153,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       {isUpdatingName ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : nameSuccess ? (
-                        <Check className="w-4 h-4" />
                       ) : (
                         'Update'
                       )}
@@ -166,11 +161,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {nameError && (
                     <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" /> {nameError}
-                    </p>
-                  )}
-                  {nameSuccess && (
-                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Name updated successfully
                     </p>
                   )}
                 </div>
@@ -275,12 +265,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {passwordError && (
                   <p className="text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" /> {passwordError}
-                  </p>
-                )}
-
-                {passwordSuccess && (
-                  <p className="text-sm text-emerald-600 flex items-center gap-1">
-                    <Check className="w-4 h-4" /> Password changed successfully
                   </p>
                 )}
 

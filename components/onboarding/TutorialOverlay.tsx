@@ -70,14 +70,24 @@ export const TutorialOverlay: React.FC = () => {
   if (!isActive || !currentStepData) return null;
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       {/* Backdrop with Spotlight */}
       <TutorialSpotlight
         key={`spotlight-${currentStep}`}
         targetSelector={currentStepData.target}
       />
 
-      {/* Tutorial Step Tooltip */}
+      {/* Click blocker - BEFORE tooltip so tooltip is on top */}
+      <div
+        key="click-blocker"
+        className="fixed inset-0"
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        style={{ pointerEvents: 'auto', zIndex: 65 }}
+      />
+
+      {/* Tutorial Step Tooltip - renders last, on top */}
       <TutorialStep
         key={`step-${currentStep}`}
         step={currentStepData}
@@ -87,16 +97,6 @@ export const TutorialOverlay: React.FC = () => {
         onPrev={prevStep}
         onSkip={skipTutorial}
         position={tooltipPosition}
-      />
-
-      {/* Click blocker (allow clicking on skip/next but nothing else) */}
-      <div
-        className="fixed inset-0"
-        onClick={(e) => {
-          // Prevent clicking through to elements behind
-          e.stopPropagation();
-        }}
-        style={{ pointerEvents: 'auto', zIndex: 45 }}
       />
     </AnimatePresence>
   );

@@ -2,6 +2,7 @@
 // Uses backend API for authentication with JWT tokens
 
 import { authApi, setToken, clearToken, getToken, clearStudentToken } from './api';
+import { disconnectSocket } from './socket';
 
 export interface Teacher {
   id: string;
@@ -74,11 +75,14 @@ export async function logIn(
 export function logOut(): void {
   clearToken();
   clearStudentToken();
+  disconnectSocket();  // Remove stale socket handlers
   localStorage.removeItem(CURRENT_TEACHER_KEY);
+  localStorage.removeItem('lara-onboarding-completed');
 }
 
 // Set current teacher session
 export function setCurrentTeacher(teacher: Teacher): void {
+  localStorage.removeItem('lara-onboarding-completed');
   localStorage.setItem(CURRENT_TEACHER_KEY, JSON.stringify(teacher));
 }
 

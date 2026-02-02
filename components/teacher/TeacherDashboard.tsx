@@ -14,6 +14,7 @@ import { ShareTaskCard } from './ShareTaskCard';
 import { SaveSessionBanner } from './SaveSessionBanner';
 import { useAppStore } from '../../lib/store';
 import { sessionsApi } from '../../lib/api';
+import { useNotification } from '../../lib/useNotification';
 
 interface SessionInfo {
   id: string;
@@ -86,6 +87,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [studentToRemove, setStudentToRemove] = useState<Student | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const currentTask = tasks.find(t => t.id === selectedTaskId) || tasks[0];
+  const notify = useNotification();
 
   // Filter students to show those with submissions OR active students for this task
   const taskStudents = students.filter(student => {
@@ -133,7 +135,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   // Handle generating feedback for a single student
   const handleGenerateFeedback = async (studentId: string) => {
     setGeneratingStudentId(studentId);
-    await onGenerateFeedback(studentId);
+    try {
+      const success = await onGenerateFeedback(studentId);
+      if (success) {
+        notify.success('Feedback Generated', 'Review the feedback and click Approve & Send to deliver it.');
+      } else {
+        notify.error('Generation Failed', 'Could not generate feedback. Please try again.');
+      }
+    } catch (error) {
+      notify.error('Generation Failed', 'An error occurred while generating feedback.');
+    }
     setGeneratingStudentId(null);
   };
 
@@ -143,7 +154,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     if (readyStudents.length === 0) return;
 
     setIsBatchGenerating(true);
-    await onGenerateFeedbackBatch(readyStudents.map(s => s.id));
+    try {
+      const result = await onGenerateFeedbackBatch(readyStudents.map(s => s.id));
+      if (result.success > 0 && result.failed === 0) {
+        notify.success('Batch Complete', `Generated feedback for ${result.success} learner${result.success > 1 ? 's' : ''}.`);
+      } else if (result.success > 0 && result.failed > 0) {
+        notify.warning('Partially Complete', `Generated ${result.success}, failed ${result.failed}.`);
+      } else {
+        notify.error('Batch Failed', 'Could not generate feedback for any learners.');
+      }
+    } catch (error) {
+      notify.error('Batch Failed', 'An error occurred during batch generation.');
+    }
     setIsBatchGenerating(false);
   };
 
@@ -155,10 +177,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     if (!studentToRemove || !onRemoveStudent) return;
     setIsRemoving(true);
     try {
-      await onRemoveStudent(studentToRemove.id);
+      const success = await onRemoveStudent(studentToRemove.id);
+      if (success) {
+        notify.success('Learner Removed', `${studentToRemove.name} has been removed from the session.`);
+      } else {
+        notify.error('Remove Failed', 'Could not remove the learner. Please try again.');
+      }
       setStudentToRemove(null);
     } catch (error) {
       console.error('Failed to remove student:', error);
+      notify.error('Remove Failed', 'An error occurred while removing the learner.');
     } finally {
       setIsRemoving(false);
     }
@@ -395,9 +423,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               try {
                 await sessionsApi.persistSession(sessionInfo.id);
                 onSessionPersisted?.();
+                notify.success('Session Saved', 'Your session data has been preserved.');
                 return true;
               } catch (error) {
                 console.error('Failed to persist session:', error);
+                notify.error('Save Failed', 'Could not save session data. Please try again.');
                 return false;
               }
             }}

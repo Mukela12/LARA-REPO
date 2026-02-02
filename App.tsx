@@ -7,6 +7,8 @@ import { TeacherReviewView } from './components/teacher/TeacherReviewView';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OnboardingProvider } from './components/onboarding/OnboardingProvider';
+import { NotificationProvider } from './components/ui/NotificationProvider';
+import { NotificationContainer } from './components/ui/NotificationContainer';
 import { Button } from './components/ui/Button';
 import { Card } from './components/ui/Card';
 import { FeedbackSession, NextStep, Student } from './types';
@@ -18,10 +20,21 @@ import { getTaskFromCode } from './lib/taskCodes';
 import { authApi, setStudentToken, getStudentToken, sessionsApi, validateToken, clearToken, getToken, setToken } from './lib/api';
 import { useStudentSocket, useTeacherSocket, useTeacherGlobalSocket, FeedbackReadyPayload, StudentJoinedPayload, GlobalStudentJoinedPayload } from './lib/useSocket';
 import { playJoinSound, playSubmitSound } from './lib/sounds';
+import { useNotification } from './lib/useNotification';
 
 type ViewMode = 'teacher_login' | 'student_flow' | 'teacher_dashboard' | 'teacher_review' | 'student_revision';
 
 function App() {
+  return (
+    <NotificationProvider>
+      <AppContent />
+      <NotificationContainer />
+    </NotificationProvider>
+  );
+}
+
+function AppContent() {
+  const notify = useNotification();
   const [currentView, setCurrentView] = useState<ViewMode>('teacher_login');
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -292,6 +305,7 @@ function App() {
         })
         .catch((error) => {
           console.error('Failed to restore session:', error);
+          notify.error('Session Restore Failed', 'Unable to restore your previous session. Please try rejoining.');
         })
         .finally(() => {
           setIsRestoringSession(false);
@@ -358,12 +372,12 @@ function App() {
     }
   }, [shouldPoll, studentSessionId, pollFailureCount]);
 
-  // Polling effect for teacher dashboard - reduced to 10 seconds as WebSocket fallback
+  // Polling effect for teacher dashboard - load once when task selected
   useEffect(() => {
     if (currentView === 'teacher_dashboard' && currentTeacher && state.currentTaskId) {
       const task = state.tasks.find(t => t.id === state.currentTaskId);
       if (task?.liveSessionId) {
-        // Initial load when task is selected
+        // Load dashboard when task is selected
         loadSessionDashboard(task.liveSessionId).then((dashboard) => {
           if (dashboard) {
             setSessionInfo({
@@ -372,26 +386,13 @@ function App() {
               dataPersisted: dashboard.session.dataPersisted,
               dataExpiresAt: dashboard.session.dataExpiresAt,
             });
+          } else {
+            setSessionInfo(null);
           }
+        }).catch(() => {
+          setSessionInfo(null);
         });
-
-        // Reduced polling as fallback (WebSocket handles real-time)
-        const interval = setInterval(() => {
-          loadSessionDashboard(task.liveSessionId!).then((dashboard) => {
-            if (dashboard) {
-              setSessionInfo({
-                id: dashboard.session.id,
-                isLive: dashboard.session.isLive,
-                dataPersisted: dashboard.session.dataPersisted,
-                dataExpiresAt: dashboard.session.dataExpiresAt,
-              });
-            }
-          });
-        }, 10000); // 10 seconds instead of 2
-
-        return () => clearInterval(interval);
       } else {
-        // Clear session info when no live session
         setSessionInfo(null);
       }
     }
@@ -422,6 +423,7 @@ function App() {
         window.history.pushState({}, '', url);
       } catch (error) {
         console.error('Failed to join session:', error);
+        notify.warning('Using Demo Mode', 'Could not connect to server. Working in offline mode.');
         // Fallback to local mode
         const student = addStudent(name);
         setCurrentStudentId(student.id);
@@ -835,7 +837,7 @@ function App() {
             await sessionsApi.submitWork(studentSessionId, content, timeElapsed);
           } catch (error) {
             console.error('Failed to submit revision:', error);
-            // Could add error handling UI here
+            notify.error('Revision Failed', 'Could not submit your revision. Please try again.');
           }
         }
         // Update local state

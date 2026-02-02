@@ -55,7 +55,7 @@ export const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({ targetSele
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/60 z-40"
+        className="fixed inset-0 bg-black/60 z-[60]"
       />
     );
   }
@@ -68,7 +68,7 @@ export const TutorialSpotlight: React.FC<TutorialSpotlightProps> = ({ targetSele
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-40 pointer-events-none"
+      className="fixed inset-0 z-[60] pointer-events-none"
     >
       {/* Background overlay with spotlight cutout using box-shadow */}
       <motion.div
@@ -119,29 +119,11 @@ export const getTooltipPosition = (
   targetSelector: string | null,
   position: 'top' | 'bottom' | 'left' | 'right' | 'center'
 ): { top: number; left: number; transformOrigin: string } => {
-  // Viewport boundary clamping constants
-  const tooltipWidth = 320; // w-80 = 20rem = 320px
-  const tooltipHeight = 200; // approximate height
+  const tooltipWidth = 320;
+  const tooltipHeight = 200;
   const padding = 16;
 
-  const clampPosition = (result: { top: number; left: number; transformOrigin: string }) => {
-    // Clamp horizontal position
-    result.left = Math.max(
-      padding + tooltipWidth / 2,
-      Math.min(result.left, window.innerWidth - padding - tooltipWidth / 2)
-    );
-
-    // Clamp vertical position
-    result.top = Math.max(
-      padding + tooltipHeight / 2,
-      Math.min(result.top, window.innerHeight - padding - tooltipHeight / 2)
-    );
-
-    return result;
-  };
-
   if (!targetSelector || position === 'center') {
-    // Center of viewport
     return {
       top: window.innerHeight / 2,
       left: window.innerWidth / 2,
@@ -161,36 +143,42 @@ export const getTooltipPosition = (
   const rect = element.getBoundingClientRect();
   const tooltipMargin = 16;
 
-  let result: { top: number; left: number; transformOrigin: string };
+  let top: number;
+  let left: number;
+  let transformOrigin: string;
 
   switch (position) {
     case 'top':
-      result = {
-        top: rect.top - tooltipMargin,
-        left: rect.left + rect.width / 2,
-        transformOrigin: 'bottom center',
-      };
+      // Tooltip bottom edge at target top
+      top = rect.top - tooltipMargin;
+      left = rect.left + rect.width / 2;
+      transformOrigin = 'bottom center';
+      // Clamp: tooltip needs space above (tooltipHeight)
+      top = Math.max(padding + tooltipHeight, top);
       break;
     case 'bottom':
-      result = {
-        top: rect.bottom + tooltipMargin,
-        left: rect.left + rect.width / 2,
-        transformOrigin: 'top center',
-      };
+      // Tooltip top edge at target bottom
+      top = rect.bottom + tooltipMargin;
+      left = rect.left + rect.width / 2;
+      transformOrigin = 'top center';
+      // Clamp: tooltip extends downward, needs space below
+      top = Math.min(top, window.innerHeight - padding - tooltipHeight);
       break;
     case 'left':
-      result = {
-        top: rect.top + rect.height / 2,
-        left: rect.left - tooltipMargin,
-        transformOrigin: 'center right',
-      };
+      // Tooltip right edge at target left
+      top = rect.top + rect.height / 2;
+      left = rect.left - tooltipMargin;
+      transformOrigin = 'center right';
+      // Clamp vertical (centered)
+      top = Math.max(padding + tooltipHeight / 2, Math.min(top, window.innerHeight - padding - tooltipHeight / 2));
       break;
     case 'right':
-      result = {
-        top: rect.top + rect.height / 2,
-        left: rect.right + tooltipMargin,
-        transformOrigin: 'center left',
-      };
+      // Tooltip left edge at target right
+      top = rect.top + rect.height / 2;
+      left = rect.right + tooltipMargin;
+      transformOrigin = 'center left';
+      // Clamp vertical (centered)
+      top = Math.max(padding + tooltipHeight / 2, Math.min(top, window.innerHeight - padding - tooltipHeight / 2));
       break;
     default:
       return {
@@ -200,5 +188,8 @@ export const getTooltipPosition = (
       };
   }
 
-  return clampPosition(result);
+  // Clamp horizontal (always centered horizontally)
+  left = Math.max(padding + tooltipWidth / 2, Math.min(left, window.innerWidth - padding - tooltipWidth / 2));
+
+  return { top, left, transformOrigin };
 };

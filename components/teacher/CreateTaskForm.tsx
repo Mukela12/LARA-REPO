@@ -5,6 +5,7 @@ import { Plus, Trash2, Save, Edit3, Upload, X, Image as ImageIcon, FileText, Hel
 import { Task } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadApi } from '../../lib/api';
+import { useNotification } from '../../lib/useNotification';
 
 // Universal Learning Expectations - EDberg Education standard criteria
 export const UNIVERSAL_LEARNING_EXPECTATIONS = [
@@ -24,6 +25,7 @@ interface CreateTaskFormProps {
 
 export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel, editTask, onUpdate }) => {
   const isEditMode = !!editTask;
+  const notify = useNotification();
 
   const [title, setTitle] = useState(editTask?.title || '');
   const [prompt, setPrompt] = useState(editTask?.prompt || '');
@@ -155,32 +157,38 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
 
     // Simulate network delay
     setTimeout(() => {
-      if (isEditMode && editTask && onUpdate) {
-        // Update existing task
-        onUpdate(editTask.id, {
-          title,
-          prompt,
-          successCriteria: finalCriteria,
-          universalExpectations: useUniversalExpectations,
-          imageUrl: imageUrl || undefined,
-          fileType: fileType || undefined,
-        });
-      } else {
-        // Create new task
-        const now = new Date();
-        const newTask: Task = {
-          id: uuidv4(),
-          title,
-          prompt,
-          successCriteria: finalCriteria,
-          universalExpectations: useUniversalExpectations,
-          imageUrl: imageUrl || undefined,
-          fileType: fileType || undefined,
-          status: 'active',
-          createdAt: now,
-          updatedAt: now,
-        };
-        onSave(newTask);
+      try {
+        if (isEditMode && editTask && onUpdate) {
+          // Update existing task
+          onUpdate(editTask.id, {
+            title,
+            prompt,
+            successCriteria: finalCriteria,
+            universalExpectations: useUniversalExpectations,
+            imageUrl: imageUrl || undefined,
+            fileType: fileType || undefined,
+          });
+          notify.success('Task Updated', `"${title}" has been updated.`);
+        } else {
+          // Create new task
+          const now = new Date();
+          const newTask: Task = {
+            id: uuidv4(),
+            title,
+            prompt,
+            successCriteria: finalCriteria,
+            universalExpectations: useUniversalExpectations,
+            imageUrl: imageUrl || undefined,
+            fileType: fileType || undefined,
+            status: 'active',
+            createdAt: now,
+            updatedAt: now,
+          };
+          onSave(newTask);
+          notify.success('Task Created', `"${title}" is ready for learners.`);
+        }
+      } catch (error) {
+        notify.error('Save Failed', 'Could not save the task. Please try again.');
       }
       setIsSubmitting(false);
     }, 800);

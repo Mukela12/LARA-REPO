@@ -295,7 +295,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <Card className="bg-slate-50">
               <div className="space-y-2 text-sm text-slate-600">
-                <p><strong className="text-slate-900">EDberg Education</strong> - Formative Feedback Engine</p>
+                <p><strong className="text-slate-900">LARA</strong> – by EDberg Education – Formative Feedback Engine</p>
                 <p>Version: 2.1</p>
               </div>
             </Card>

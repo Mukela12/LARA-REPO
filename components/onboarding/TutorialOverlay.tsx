@@ -38,7 +38,7 @@ export const TutorialOverlay: React.FC = () => {
         if (element) {
           element.scrollIntoView({
             behavior: 'smooth',
-            block: 'center',
+            block: 'nearest',
             inline: 'nearest'
           });
         }

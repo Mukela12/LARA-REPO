@@ -66,8 +66,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Mobile Header */}
         <header className="lg:hidden bg-navy-800 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2.5">
-            <img src="/iceberg.png" alt="EDberg" className="w-9 h-9 object-contain" />
-            <span className="text-xl tracking-wide font-logo font-extrabold text-white">EDberg</span>
+            <img src="/iceberg.png" alt="LARA" className="w-9 h-9 object-contain" />
+            <span className="text-xl tracking-wide font-logo font-extrabold text-white">LARA</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onExit} className="text-xs text-white hover:bg-navy-700 hover:text-white">
             Logout

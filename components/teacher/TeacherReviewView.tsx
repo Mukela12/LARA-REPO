@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Sparkles, Loader2, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Edit2, AlertCircle, RefreshCw, Clock, Target, ChevronDown, ChevronUp, Loader2, MoreHorizontal } from 'lucide-react';
 import { Student, Submission, FeedbackSession, Task } from '../../types';
 import { FeedbackEditForm } from './FeedbackEditForm';
 import { FeedbackWarnings } from './FeedbackWarnings';
@@ -14,7 +14,7 @@ interface TeacherReviewViewProps {
   submission: Submission;
   task?: Task; // Task for validation against success criteria
   onBack: () => void;
-  onApprove: (studentId: string, isMastered?: boolean) => void;
+  onApprove: (studentId: string) => void;
   onUpdateFeedback: (studentId: string, feedback: FeedbackSession) => void;
   onRegenerateFeedback: (studentId: string) => Promise<boolean>;
 }
@@ -48,10 +48,6 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Mastery toggle - initialize from AI suggestion
-  const aiSuggestsMastery = submission.feedback?.masteryAchieved ?? false;
-  const [markAsMastered, setMarkAsMastered] = useState(aiSuggestsMastery);
 
   // Run validation on feedback
   const allWarnings = useMemo(() => {
@@ -208,27 +204,11 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* Mastery Toggle */}
-              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={markAsMastered}
-                  onChange={(e) => setMarkAsMastered(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className={`text-xs font-medium hidden sm:inline ${markAsMastered ? 'text-emerald-700' : 'text-slate-500'}`}>
-                  Mastered
-                </span>
-                {aiSuggestsMastery && (
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-500 hidden sm:block" title="AI Suggested" />
-                )}
-              </label>
-
               {/* Approve Button */}
               <Button
-                variant={markAsMastered ? 'gold' : 'primary'}
+                variant="primary"
                 size="sm"
-                onClick={() => onApprove(student.id, markAsMastered)}
+                onClick={() => onApprove(student.id)}
                 className="whitespace-nowrap"
               >
                 <CheckCircle className="w-3.5 h-3.5 sm:mr-1.5" />
@@ -251,7 +231,10 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                 <div className="flex items-center gap-4 py-2 border-t border-slate-100">
                   <h1 className="text-lg font-semibold text-slate-900">Review Feedback</h1>
                   {submission.timeElapsed && (
-                    <div className="flex items-center gap-1.5 text-sm text-slate-500 ml-auto">
+                    <div
+                      className="flex items-center gap-1.5 text-sm text-slate-500 ml-auto"
+                      title="Time from when the student opened the task to when they submitted"
+                    >
                       <Clock className="w-4 h-4" />
                       <span>{formatTime(submission.timeElapsed)}</span>
                     </div>
@@ -389,7 +372,7 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">
-                    EDberg-Generated Feedback
+                    LARA-Generated Feedback
                   </h2>
                   <Badge variant="green">Ready to Review</Badge>
                 </div>
@@ -456,6 +439,27 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {/* Student Reflection Prompts */}
+                {submission.feedback.nextSteps.some(step => step.reflectionPrompt) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-700 mb-3">Student Reflection Prompts</h3>
+                    <div className="space-y-2">
+                      {submission.feedback.nextSteps
+                        .filter(step => step.reflectionPrompt)
+                        .map((step, idx) => (
+                          <div key={idx} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                            <p className="text-xs font-medium text-purple-700 mb-1">
+                              {step.actionVerb} {step.target}
+                            </p>
+                            <p className="text-sm text-purple-900 italic">
+                              "{step.reflectionPrompt}"
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

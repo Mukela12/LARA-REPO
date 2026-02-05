@@ -132,7 +132,6 @@ export interface StudentRestoreResponse {
   };
   feedbackReady: boolean;
   feedback?: FeedbackData;
-  masteryConfirmed: boolean;
   submission?: {
     content: string;
     timestamp: number;
@@ -385,7 +384,6 @@ export interface StudentFeedbackResponse {
   status: string;
   feedbackReady: boolean;
   feedback?: FeedbackData;
-  masteryConfirmed?: boolean;
   message?: string;
 }
 
@@ -405,10 +403,9 @@ export const sessionsApi = {
       body: JSON.stringify({ studentIds }),
     }),
 
-  approveFeedback: (sessionId: string, studentId: string, isMastered: boolean): Promise<{ approved: boolean }> =>
+  approveFeedback: (sessionId: string, studentId: string): Promise<{ approved: boolean }> =>
     apiFetch(`/api/sessions/${sessionId}/feedback/${studentId}/approve`, {
       method: 'PATCH',
-      body: JSON.stringify({ isMastered }),
     }),
 
   editFeedback: (sessionId: string, studentId: string, feedback: Partial<FeedbackData>): Promise<{ updated: boolean }> =>

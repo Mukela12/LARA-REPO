@@ -201,7 +201,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
               transition={{ duration: 0.3 }}
               className="mx-auto mb-4 relative z-10"
             >
-              <img src="/iceberg.png" alt="EDberg" className="w-20 h-20 mx-auto object-contain" />
+              <img src="/iceberg.png" alt="LARA" className="w-20 h-20 mx-auto object-contain" />
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
@@ -209,7 +209,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
               transition={{ delay: 0.1 }}
               className="text-2xl font-logo font-extrabold text-white mb-2 relative z-10"
             >
-              EDberg Education
+              LARA
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 10 }}
@@ -457,7 +457,7 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
           {/* Footer */}
           <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
-              EDberg Education v2.1 | Teacher Portal
+              LARA v2.1 | EDberg Education
             </p>
           </div>
         </div>

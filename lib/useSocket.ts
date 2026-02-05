@@ -6,7 +6,6 @@ import { FeedbackSession } from '../types';
 export interface FeedbackReadyPayload {
   studentId: string;
   feedback: FeedbackSession;
-  masteryConfirmed: boolean;
   status: string;
 }
 

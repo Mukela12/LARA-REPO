@@ -4,7 +4,7 @@ import { Student, Task, FeedbackSession, Submission, NextStep, Folder, TeacherCr
 import { generateUniqueTaskCode, saveTaskCodeMapping, getAllTaskCodes } from './taskCodes';
 import { generateFeedback } from './gemini';
 
-// Universal Learning Expectations - EDberg Education standard criteria
+// Universal Learning Expectations - LARA standard criteria
 const UNIVERSAL_LEARNING_EXPECTATIONS = [
   "Clarity of response - Is the answer clear and easy to understand?",
   "Use of evidence and/or examples - Does the response include relevant evidence or examples?",
@@ -209,21 +209,14 @@ export function useAppStore(teacherId?: string) {
     });
   };
 
-  const approveFeedback = (studentId: string, isMastered?: boolean) => {
+  const approveFeedback = (studentId: string) => {
     setState(prev => ({
       ...prev,
       students: prev.students.map(s =>
         s.id === studentId
-          ? { ...s, status: isMastered ? 'completed' as const : 'feedback_ready' as const }
+          ? { ...s, status: 'feedback_ready' as const }
           : s
       ),
-      submissions: {
-        ...prev.submissions,
-        [studentId]: {
-          ...prev.submissions[studentId],
-          masteryConfirmed: isMastered
-        }
-      }
     }));
   };
 

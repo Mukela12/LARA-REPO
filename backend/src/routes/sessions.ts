@@ -8,7 +8,7 @@ import { emitToStudent, emitToSessionTeacher } from '../lib/socket';
 
 const router = Router();
 
-// Universal Learning Expectations - EDberg Education standard criteria
+// Universal Learning Expectations - LARA standard criteria
 const UNIVERSAL_LEARNING_EXPECTATIONS = [
   "Clarity of response - Is the answer clear and easy to understand?",
   "Use of evidence and/or examples - Does the response include relevant evidence or examples?",
@@ -457,7 +457,6 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
   try {
     const sessionId = req.params.sessionId as string;
     const studentId = req.params.studentId as string;
-    const { isMastered } = req.body;
     const teacherId = req.teacher!.id;
     const approvedAt = new Date();
 
@@ -475,7 +474,7 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
     // Require Redis for live session operations
     const redisClient = requireRedis();
 
-    const newStatus = isMastered ? 'completed' : 'feedback_ready';
+    const newStatus = 'feedback_ready';
 
     // Update submission in Redis (source of truth)
     const submissionData = await redisClient.get(sessionKeys.submission(sessionId, studentId));
@@ -485,9 +484,7 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
 
     const submission = JSON.parse(submissionData) as StudentSubmission;
     submission.feedbackStatus = 'released';
-    if (submission.feedback) {
-      submission.feedback.masteryAchieved = isMastered || submission.feedback.masteryAchieved;
-    }
+    // Keep feedback as-is (no mastery override)
     await redisClient.set(
       sessionKeys.submission(sessionId, studentId),
       JSON.stringify(submission),
@@ -530,7 +527,7 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
             await tx.submissionFeedback.update({
               where: { id: pgSubmission.feedback.id },
               data: {
-                masteryAchieved: isMastered || pgSubmission.feedback.masteryAchieved,
+                masteryAchieved: pgSubmission.feedback.masteryAchieved,
                 approvedBy: teacherId,
                 approvedAt: approvedAt,
               },
@@ -551,7 +548,6 @@ router.patch('/:sessionId/feedback/:studentId/approve', authenticateTeacher, asy
       emitToStudent(studentId, 'feedback-ready', {
         studentId,
         feedback: submission.feedback,
-        masteryConfirmed: isMastered,
         status: newStatus,
       });
     }
@@ -641,7 +637,6 @@ router.get('/:sessionId/feedback/:studentId', authenticateStudent, async (req: A
         status: student.status,
         feedbackReady: true,
         feedback: submission.feedback,
-        masteryConfirmed: submission.feedback.masteryAchieved,
       });
     }
 

@@ -5,9 +5,10 @@ import { ChevronRight, Clock } from 'lucide-react';
 
 interface StudentListProps {
   students: Student[];
+  onNavigateToReview?: (studentId: string) => void;
 }
 
-export const StudentList: React.FC<StudentListProps> = ({ students }) => {
+export const StudentList: React.FC<StudentListProps> = ({ students, onNavigateToReview }) => {
   // Shared Badge Component
   const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
@@ -55,7 +56,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students }) => {
                            <span>2m ago</span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                            <button className="text-brand-600 hover:text-brand-700 font-medium text-xs opacity-0 group-hover:opacity-100 transition-opacity">View Details</button>
+                            <button onClick={() => onNavigateToReview?.(student.id)} className="text-brand-600 hover:text-brand-700 font-medium text-xs opacity-0 group-hover:opacity-100 transition-opacity">View Details</button>
                         </td>
                     </tr>
                 ))}
@@ -66,7 +67,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students }) => {
       {/* MOBILE LIST VIEW (Hidden on Desktop) */}
       <div className="lg:hidden divide-y divide-slate-100">
         {students.map(student => (
-          <div key={student.id} className="p-4 flex items-center justify-between active:bg-slate-50 transition-colors cursor-pointer">
+          <div key={student.id} onClick={() => onNavigateToReview?.(student.id)} className="p-4 flex items-center justify-between active:bg-slate-50 transition-colors cursor-pointer">
             <div className="flex flex-col gap-1.5">
               <span className="font-medium text-slate-900">{student.name}</span>
               <div className="flex items-center gap-2">

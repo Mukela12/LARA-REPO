@@ -8,6 +8,7 @@ export async function generateFeedback(
   studentWork: string
 ): Promise<FeedbackSession> {
   const systemPrompt = `You are LARA, a formative feedback assistant.
+IMPORTANT: Always use Australian/UK English spelling in all generated text (e.g., colour, behaviour, organisation, customise, analyse, recognise, learnt).
 
 CRITICAL: You MUST respond with ONLY valid JSON. No introductory text, no explanations, no markdown - ONLY the JSON object. Start your response with { and end with }.
 
@@ -30,7 +31,8 @@ Every response MUST answer:
 - FORBIDDEN vague phrases: "Good job", "Nice work", "Add more detail", "Be clearer", "Needs work"
 
 ### 4. Concise & High-Impact
-- Maximum: 2 strengths, 1-2 growthAreas, 1-2 nextSteps
+- Maximum: 2 strengths, 1-2 growthAreas, 2-3 nextSteps
+- IMPORTANT: Always generate exactly 2-3 next steps. Never generate fewer than 2.
 - Keep each "text" field under 100 words
 - Keep anchors SHORT (max 20 words, just key phrases)
 - Focus on HIGH-LEVERAGE improvements only
@@ -181,7 +183,12 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
   // Enforce limits (Principle 4: Concise & High-Impact)
   data.strengths = (data.strengths || []).slice(0, 3);
   data.growthAreas = (data.growthAreas || []).slice(0, 2);
-  data.nextSteps = (data.nextSteps || []).slice(0, 2);
+  data.nextSteps = (data.nextSteps || []).slice(0, 3);
+
+  // Fallback: ensure at least 2 next steps (Principle 4: 2-3 nextSteps)
+  if (data.nextSteps.length < 2 && data.nextSteps.length > 0) {
+    data.nextSteps.push({ ...data.nextSteps[0], id: `next-fallback-${data.nextSteps.length}` });
+  }
 
   // Ensure IDs are strings
   data.strengths.forEach((s: any, i: number) => (s.id = `str-${i}`));

@@ -22,8 +22,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
     <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-slate-200 flex-col z-20">
       <div className="p-6 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <img src="/iceberg.png" alt="EDberg" className="w-10 h-10 object-contain" />
-          <span className="text-2xl tracking-wide font-logo font-extrabold text-navy-800">EDberg</span>
+          <img src="/iceberg.png" alt="LARA" className="w-10 h-10 object-contain" />
+          <span className="text-2xl tracking-wide font-logo font-extrabold text-navy-800">LARA</span>
         </div>
       </div>
 
@@ -34,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onNavigate, onOpenS
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              data-tutorial={item.id === 'create' ? 'create-task' : undefined}
+              data-tutorial={item.id === 'create' ? 'create-task' : item.id === 'tasks' ? 'folders' : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
                 isActive
                   ? 'bg-navy-800 text-white'

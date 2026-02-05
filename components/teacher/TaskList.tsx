@@ -28,6 +28,17 @@ export const TaskList: React.FC<TaskListProps> = ({
   selectedFolderId,
 }) => {
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('text/task-id', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggingTaskId(taskId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingTaskId(null);
+  };
   // Calculate statistics for each task
   const getTaskStats = (taskId: string) => {
     const taskSubmissions = Object.values(submissions).filter(
@@ -116,12 +127,17 @@ export const TaskList: React.FC<TaskListProps> = ({
         return (
           <div
             key={task.id}
-            className={`relative w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-              isInactive
-                ? 'border-slate-200 bg-slate-50 opacity-70'
-                : isSelected
-                  ? 'border-brand-500 bg-brand-50 shadow-md'
-                  : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50/30'
+            draggable
+            onDragStart={(e) => handleDragStart(e, task.id)}
+            onDragEnd={handleDragEnd}
+            className={`relative w-full text-left p-4 rounded-xl border-2 transition-all duration-200 cursor-grab active:cursor-grabbing ${
+              draggingTaskId === task.id
+                ? 'opacity-50 border-brand-400 bg-brand-50/50'
+                : isInactive
+                  ? 'border-slate-200 bg-slate-50 opacity-70'
+                  : isSelected
+                    ? 'border-brand-500 bg-brand-50 shadow-md'
+                    : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50/30'
             }`}
           >
             <button

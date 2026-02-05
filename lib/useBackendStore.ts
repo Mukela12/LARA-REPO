@@ -406,26 +406,19 @@ export function useBackendStore(teacherId?: string) {
     }
   };
 
-  const approveFeedback = async (studentId: string, isMastered?: boolean) => {
+  const approveFeedback = async (studentId: string) => {
     if (!state.currentSessionId) return;
 
     try {
-      await sessionsApi.approveFeedback(state.currentSessionId, studentId, isMastered || false);
+      await sessionsApi.approveFeedback(state.currentSessionId, studentId);
 
       setState(prev => ({
         ...prev,
         students: prev.students.map(s =>
           s.id === studentId
-            ? { ...s, status: isMastered ? 'completed' as const : 'feedback_ready' as const }
+            ? { ...s, status: 'feedback_ready' as const }
             : s
         ),
-        submissions: {
-          ...prev.submissions,
-          [studentId]: {
-            ...prev.submissions[studentId],
-            masteryConfirmed: isMastered,
-          },
-        },
       }));
     } catch (error) {
       console.error('Failed to approve feedback:', error);

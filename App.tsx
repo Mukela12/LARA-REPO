@@ -65,7 +65,6 @@ function AppContent() {
     setSelectedNextStep,
     saveSelectedNextStep,
     submitRevision,
-    markAsCompleted,
     deactivateTask,
     reactivateTask,
     createFolder,
@@ -127,14 +126,10 @@ function AppContent() {
         undefined
       );
 
-      // Update status based on mastery
-      if (payload.masteryConfirmed) {
-        markAsCompleted(currentStudentId);
-      } else {
-        approveFeedback(currentStudentId, payload.masteryConfirmed);
-      }
+      // Update status to feedback_ready
+      approveFeedback(currentStudentId);
     }
-  }, [currentStudentId, studentTaskId, state.currentTaskId, state.submissions, submitWork, markAsCompleted, approveFeedback]);
+  }, [currentStudentId, studentTaskId, state.currentTaskId, state.submissions, submitWork, approveFeedback]);
 
   // Use WebSocket for real-time feedback when student is waiting
   useStudentSocket(studentSessionId, currentStudentId, handleFeedbackReady);
@@ -291,10 +286,8 @@ function AppContent() {
               response.feedback as FeedbackSession,
               undefined
             );
-            if (response.status === 'completed') {
-              markAsCompleted(response.studentId);
-            } else if (response.status === 'feedback_ready' || response.status === 'revising') {
-              approveFeedback(response.studentId, response.masteryConfirmed);
+            if (response.status === 'feedback_ready' || response.status === 'revising') {
+              approveFeedback(response.studentId);
             }
           }
 
@@ -349,12 +342,8 @@ function AppContent() {
               // Update local state with feedback
               const actualTaskId = studentTaskId || state.currentTaskId;
               submitWork(currentStudentId, actualTaskId, state.submissions[currentStudentId]?.content || '', response.feedback as FeedbackSession, undefined);
-              // Update status
-              if (response.masteryConfirmed) {
-                markAsCompleted(currentStudentId);
-              } else {
-                approveFeedback(currentStudentId, response.masteryConfirmed);
-              }
+              // Update status to feedback_ready
+              approveFeedback(currentStudentId);
             }
           } catch (error) {
             // Increment failure count for backoff
@@ -610,22 +599,6 @@ function AppContent() {
                     return false;
                   }
                 }}
-                onSessionPersisted={() => {
-                  // Reload session info after persisting
-                  const task = state.tasks.find(t => t.id === state.currentTaskId);
-                  if (task?.liveSessionId) {
-                    loadSessionDashboard(task.liveSessionId).then((dashboard) => {
-                      if (dashboard) {
-                        setSessionInfo({
-                          id: dashboard.session.id,
-                          isLive: dashboard.session.isLive,
-                          dataPersisted: dashboard.session.dataPersisted,
-                          dataExpiresAt: dashboard.session.dataExpiresAt,
-                        });
-                      }
-                    });
-                  }
-                }}
             />
         </DashboardLayout>
       </OnboardingProvider>
@@ -649,8 +622,8 @@ function AppContent() {
         submission={submission}
         task={task}
         onBack={handleBackFromReview}
-        onApprove={(studentId, isMastered) => {
-          approveFeedback(studentId, isMastered);
+        onApprove={(studentId) => {
+          approveFeedback(studentId);
           handleBackFromReview();
         }}
         onUpdateFeedback={updateFeedback}
@@ -685,11 +658,9 @@ function AppContent() {
 
     // Check feedback status - use submission data as source of truth for restored sessions
     const hasFeedback = !!(submission?.feedback);
-    const isMasteryConfirmed = submission?.masteryConfirmed === true;
 
     // Status can come from state.students OR be inferred from submission
-    const isFeedbackReady = status === 'feedback_ready' || status === 'revising' || (hasFeedback && !isMasteryConfirmed);
-    const isCompleted = status === 'completed' || isMasteryConfirmed;
+    const isFeedbackReady = status === 'feedback_ready' || status === 'revising' || hasFeedback;
 
     // Find the task - prioritize: backend task > global task lookup > studentTaskId > currentTaskId > first task
     let currentTask: typeof state.tasks[0] | undefined;
@@ -753,45 +724,13 @@ function AppContent() {
       );
     }
 
-    // If student has completed the task, show completion view
-    if (isCompleted && currentStudentId) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-          <Card className="max-w-md w-full p-8 text-center space-y-6">
-            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
-              <img src="/iceberg.png" alt="EDberg" className="w-10 h-10 object-contain" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-slate-900">Task Complete!</h2>
-              <p className="text-slate-600">
-                Great work! You've successfully completed this task.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setCurrentView('teacher_login')}
-            >
-              Back to Start
-            </Button>
-          </Card>
-        </div>
-      );
-    }
-
     // If feedback approved, show feedback view
     if (isFeedbackReady && currentStudentId && submission?.feedback) {
-      const handleComplete = () => {
-        markAsCompleted(currentStudentId);
-      };
-
       return (
         <div className="bg-slate-50 min-h-screen">
           <FeedbackView
             sessionData={submission.feedback}
             onContinue={handleStudentContinue}
-            masteryConfirmed={submission.masteryConfirmed}
-            onComplete={handleComplete}
             task={currentTask}
             submission={submission}
           />

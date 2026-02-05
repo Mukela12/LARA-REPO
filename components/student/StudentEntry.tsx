@@ -153,7 +153,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             <div className="w-16 h-16 bg-gold-100 text-gold-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <KeyRound className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-logo font-extrabold text-navy-800">EDberg</h1>
+            <h1 className="text-2xl font-logo font-extrabold text-navy-800">LARA</h1>
             <p className="text-slate-500 text-sm mt-1">Enter your code</p>
           </div>
 
@@ -216,16 +216,17 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
 
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Your Name</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Your Student Code</label>
               <input
                 autoFocus
                 required
                 type="text"
                 className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none"
-                placeholder="Enter your full name"
+                placeholder="e.g., 9A01"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
+              <p className="text-xs text-slate-500 mt-1">Use the code your teacher gave you (e.g., 9A01). Don't type your name.</p>
             </div>
             <Button type="submit" className="w-full h-12 text-base" size="lg">
               Start Learning

@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { uploadApi } from '../../lib/api';
 import { useNotification } from '../../lib/useNotification';
 
-// Universal Learning Expectations - EDberg Education standard criteria
+// Universal Learning Expectations - LARA standard criteria
 export const UNIVERSAL_LEARNING_EXPECTATIONS = [
   "Clarity of response - Is the answer clear and easy to understand?",
   "Use of evidence and/or examples - Does the response include relevant evidence or examples?",
@@ -331,7 +331,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
         <Card className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Success Criteria</label>
-            <p className="text-xs text-slate-500">LARA will use these to generate feedback</p>
+            <p className="text-xs text-slate-500">LARA needs success criteria to guide feedback. You can use the defaults, add your own, or do both.</p>
           </div>
 
           {/* Criteria Type Toggle */}
@@ -357,7 +357,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Custom Criteria
+                Task Specific Criteria
               </button>
             </div>
 
@@ -376,31 +376,9 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
               {showUleTooltip && (
                 <div className="absolute left-0 top-full mt-2 w-80 p-4 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
                   <h4 className="font-semibold text-slate-900 mb-2">Universal Learning Expectations</h4>
-                  <p className="text-sm text-slate-600 mb-3">
-                    Universal Learning Expectations are EDberg Education's standard criteria for evaluating student work. They focus on:
+                  <p className="text-sm text-slate-600">
+                    LARA uses these general writing expectations to guide feedback on student writing. You do not need to change these for most tasks.
                   </p>
-                  <ul className="text-sm text-slate-600 space-y-1">
-                    <li className="flex items-start gap-2">
-                      <span className="text-brand-500">•</span>
-                      Clarity of response
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-brand-500">•</span>
-                      Use of evidence and examples
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-brand-500">•</span>
-                      Reasoning and explanation
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-brand-500">•</span>
-                      Organisation
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-brand-500">•</span>
-                      Language for audience and purpose
-                    </li>
-                  </ul>
                 </div>
               )}
             </div>
@@ -415,7 +393,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
                   <div>
                     <h4 className="font-semibold text-blue-900 mb-1">Universal Learning Expectations Active</h4>
                     <p className="text-sm text-blue-700">
-                      Your students will be assessed on clarity, evidence, reasoning, organisation, and appropriate language.
+                      LARA uses these general writing expectations to guide feedback on student writing. You do not need to change these for most tasks.
                     </p>
                   </div>
                 </div>
@@ -475,7 +453,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
           {/* Success Criteria Guidance */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
             <p className="text-sm text-amber-800">
-              <span className="font-semibold">Tip:</span> Ensure your success criteria directly relate to the writing prompt. For example, if asking about population impacts, criteria should mention specific aspects (economy, workforce, etc.) that you want students to address.
+              Use this section to guide LARA's feedback. LARA combines these criteria with the general writing expectations. If you leave this blank, LARA will still use the general writing expectations.
             </p>
           </div>
         </Card>

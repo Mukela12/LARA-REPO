@@ -11,7 +11,6 @@ import { TaskList } from './TaskList';
 import { TaskSelector } from './TaskSelector';
 import { FolderManagement } from './FolderManagement';
 import { ShareTaskCard } from './ShareTaskCard';
-import { SaveSessionBanner } from './SaveSessionBanner';
 import { useAppStore } from '../../lib/store';
 import { sessionsApi } from '../../lib/api';
 import { useNotification } from '../../lib/useNotification';
@@ -48,7 +47,6 @@ interface TeacherDashboardProps {
   onUpdateFolder: (folderId: string, name: string, description?: string, color?: string) => void;
   onGenerateFeedback: (studentId: string) => Promise<boolean>;
   onGenerateFeedbackBatch: (studentIds: string[]) => Promise<{ success: number; failed: number }>;
-  onSessionPersisted?: () => void;
   onRemoveStudent?: (studentId: string) => Promise<boolean>;
 }
 
@@ -77,7 +75,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onUpdateFolder,
   onGenerateFeedback,
   onGenerateFeedbackBatch,
-  onSessionPersisted,
   onRemoveStudent
 }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -248,7 +245,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <div>
               <h2 className="text-2xl font-bold text-slate-900">All Tasks</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Manage your tasks, organize into folders, and control task availability
+                Manage your tasks, organise into folders, and control task availability
               </p>
             </div>
             <Button
@@ -264,7 +261,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           <div className="flex gap-6">
             {/* Folder Sidebar */}
             <div className="w-64 flex-shrink-0">
-              <Card className="sticky top-4" data-tutorial="folders">
+              <Card className="sticky top-4">
                 <FolderManagement
                   folders={folders}
                   selectedFolderId={selectedFolderId}
@@ -272,6 +269,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   onSelectFolder={setSelectedFolderId}
                   onDeleteFolder={onDeleteFolder}
                   onUpdateFolder={onUpdateFolder}
+                  onMoveTaskToFolder={onMoveTaskToFolder}
                 />
               </Card>
             </div>
@@ -412,27 +410,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           />
         )}
 
-        {/* Save Session Banner */}
-        {sessionInfo && sessionInfo.isLive && !sessionInfo.dataPersisted && sessionInfo.dataExpiresAt && (
-          <SaveSessionBanner
-            sessionId={sessionInfo.id}
-            dataExpiresAt={sessionInfo.dataExpiresAt}
-            dataPersisted={sessionInfo.dataPersisted}
-            studentCount={taskStudents.length}
-            onPersist={async () => {
-              try {
-                await sessionsApi.persistSession(sessionInfo.id);
-                onSessionPersisted?.();
-                notify.success('Session Saved', 'Your session data has been preserved.');
-                return true;
-              } catch (error) {
-                console.error('Failed to persist session:', error);
-                notify.error('Save Failed', 'Could not save session data. Please try again.');
-                return false;
-              }
-            }}
-          />
-        )}
       </div>
 
       {/* Stats Grid */}

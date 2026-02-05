@@ -27,7 +27,7 @@ async function createOnboardingDemo(teacherId: string) {
       data: {
         teacherId,
         name: 'Getting Started',
-        description: 'Sample tasks to help you learn EDberg',
+        description: 'Sample tasks to help you learn LARA',
         color: '#6bb7e4', // Brand blue
       },
     });
@@ -83,7 +83,7 @@ async function createOnboardingDemo(teacherId: string) {
       data: {
         studentId: emmaId,
         sessionId: session.id,
-        content: 'This year, I hope to learn how to write better essays. I want to improve my vocabulary and learn how to organize my thoughts more clearly. I also want to read more books so I can understand different writing styles.',
+        content: 'This year, I hope to learn how to write better essays. I want to improve my vocabulary and learn how to organise my thoughts more clearly. I also want to read more books so I can understand different writing styles.',
         feedbackStatus: 'released',
         validationWarnings: [],
       },
@@ -107,7 +107,7 @@ async function createOnboardingDemo(teacherId: string) {
         masteryAchieved: true,
         strengths: [
           { id: '1', type: 'task', text: 'You clearly stated your main goal for the year', anchors: [] },
-          { id: '2', type: 'process', text: 'You organized your thoughts into logical points', anchors: [] },
+          { id: '2', type: 'process', text: 'You organised your thoughts into logical points', anchors: [] },
         ],
         growthAreas: [
           { id: '1', type: 'task', text: 'Consider adding specific examples of books or writing styles', anchors: [] },
@@ -151,7 +151,7 @@ async function createOnboardingDemo(teacherId: string) {
       // Add Emma's submission to Redis
       const emmaSubmissionData = {
         studentId: emmaId,
-        content: 'This year, I hope to learn how to write better essays. I want to improve my vocabulary and learn how to organize my thoughts more clearly. I also want to read more books so I can understand different writing styles.',
+        content: 'This year, I hope to learn how to write better essays. I want to improve my vocabulary and learn how to organise my thoughts more clearly. I also want to read more books so I can understand different writing styles.',
         timestamp: Date.now() - 240000,
         revisionCount: 0,
         feedbackStatus: 'released',
@@ -162,7 +162,7 @@ async function createOnboardingDemo(teacherId: string) {
           masteryAchieved: true,
           strengths: [
             { id: '1', type: 'task', text: 'You clearly stated your main goal for the year', anchors: [] },
-            { id: '2', type: 'process', text: 'You organized your thoughts into logical points', anchors: [] },
+            { id: '2', type: 'process', text: 'You organised your thoughts into logical points', anchors: [] },
           ],
           growthAreas: [
             { id: '1', type: 'task', text: 'Consider adding specific examples of books or writing styles', anchors: [] },
@@ -650,7 +650,6 @@ router.get('/session/restore/:studentId', async (req, res: Response) => {
       },
       feedbackReady,
       feedback,
-      masteryConfirmed: latestSubmission?.feedback?.masteryAchieved || false,
       submission: latestSubmission ? {
         content: latestSubmission.content,
         timestamp: latestSubmission.timestamp.getTime(),

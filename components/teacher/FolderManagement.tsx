@@ -10,6 +10,7 @@ interface FolderManagementProps {
   onSelectFolder: (folderId: string | null) => void;
   onDeleteFolder?: (folderId: string) => void;
   onUpdateFolder?: (folderId: string, name: string, description?: string, color?: string) => void;
+  onMoveTaskToFolder?: (taskId: string, folderId: string | null) => void;
 }
 
 const FOLDER_COLORS = [
@@ -30,6 +31,7 @@ export const FolderManagement: React.FC<FolderManagementProps> = ({
   onSelectFolder,
   onDeleteFolder,
   onUpdateFolder,
+  onMoveTaskToFolder,
 }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -37,6 +39,26 @@ export const FolderManagement: React.FC<FolderManagementProps> = ({
   const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLORS[0]);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null | undefined>(undefined);
+
+  const handleDragOver = (e: React.DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverFolderId(folderId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverFolderId(undefined);
+  };
+
+  const handleDrop = (e: React.DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    setDragOverFolderId(undefined);
+    const taskId = e.dataTransfer.getData('text/task-id');
+    if (taskId && onMoveTaskToFolder) {
+      onMoveTaskToFolder(taskId, folderId);
+    }
+  };
 
   const handleCreateFolder = () => {
     if (newFolderName.trim()) {
@@ -129,27 +151,38 @@ export const FolderManagement: React.FC<FolderManagementProps> = ({
 
       {/* Folder List */}
       <div className="space-y-1">
-        {/* All Tasks (no folder) */}
+        {/* All Tasks (no folder) — also a drop target */}
         <button
           onClick={() => onSelectFolder(null)}
+          onDragOver={(e) => handleDragOver(e, null)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, null)}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-            selectedFolderId === null
-              ? 'bg-brand-50 text-brand-700 font-medium'
-              : 'text-slate-600 hover:bg-slate-50'
+            dragOverFolderId === null
+              ? 'bg-brand-100 border-2 border-dashed border-brand-400 text-brand-700 font-medium'
+              : selectedFolderId === null
+                ? 'bg-brand-50 text-brand-700 font-medium'
+                : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
           <FolderIcon className="w-4 h-4 text-slate-400" />
           <span>All Tasks</span>
+          {dragOverFolderId === null && <span className="text-xs text-brand-500 ml-auto">Drop here</span>}
         </button>
 
-        {/* Folder Items */}
+        {/* Folder Items — also drop targets */}
         {folders.map((folder) => (
           <div
             key={folder.id}
+            onDragOver={(e) => handleDragOver(e, folder.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, folder.id)}
             className={`group flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              selectedFolderId === folder.id
-                ? 'bg-brand-50 text-brand-700 font-medium'
-                : 'text-slate-600 hover:bg-slate-50'
+              dragOverFolderId === folder.id
+                ? 'bg-brand-100 border-2 border-dashed border-brand-400 text-brand-700 font-medium'
+                : selectedFolderId === folder.id
+                  ? 'bg-brand-50 text-brand-700 font-medium'
+                  : 'text-slate-600 hover:bg-slate-50'
             }`}
           >
             {editingFolderId === folder.id ? (
@@ -217,7 +250,7 @@ export const FolderManagement: React.FC<FolderManagementProps> = ({
 
         {folders.length === 0 && !showCreateForm && (
           <p className="text-xs text-slate-400 px-3 py-2">
-            No folders yet. Create one to organize your tasks.
+            No folders yet. Create one to organise your tasks.
           </p>
         )}
       </div>

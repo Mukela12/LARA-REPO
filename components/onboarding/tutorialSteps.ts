@@ -9,15 +9,15 @@ export interface TutorialStep {
 export const tutorialSteps: TutorialStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to EDberg!',
-    description: 'EDberg helps you create writing tasks, collect student submissions, and provide AI-powered feedback. Let\'s take a quick tour to get you started.',
+    title: 'Welcome to LARA!',
+    description: 'Create a task, collect drafts, and give high-quality feedback. LARA provides teacher-designed, research-informed guidance so students can understand their learning and improve with each draft. Let\'s take a quick tour to set up your first task.',
     target: null,
     position: 'center',
   },
   {
     id: 'create-task',
     title: 'Create Your First Task',
-    description: 'Click here to create a new writing task for your students. You can set the prompt, success criteria, and customize feedback settings.',
+    description: 'Click here to create a new writing task for your students. You can set the prompt, success criteria, and customise feedback settings.',
     target: '[data-tutorial="create-task"]',
     position: 'bottom',
   },
@@ -33,7 +33,7 @@ export const tutorialSteps: TutorialStep[] = [
     title: 'Monitor Your Students',
     description: 'As students join, they appear here. You can see their status at a glance - who has joined, submitted, or needs attention.',
     target: '[data-tutorial="student-list"]',
-    position: 'left',
+    position: 'top',
   },
   {
     id: 'remove-student',
@@ -45,14 +45,14 @@ export const tutorialSteps: TutorialStep[] = [
   {
     id: 'generate-feedback',
     title: 'Generate AI Feedback',
-    description: 'When students submit their work, you\'ll see them here. Click "Generate Feedback" to create personalized AI feedback for each student.',
+    description: 'When students submit their work, you\'ll see them here. Click "Generate Feedback" to create personalised AI feedback for each student.',
     target: '[data-tutorial="generate-feedback"]',
     position: 'bottom',
   },
   {
     id: 'folders',
-    title: 'Organize with Folders',
-    description: 'Create folders to organize your tasks by class, topic, or any system that works for you. This helps keep everything tidy as you create more tasks.',
+    title: 'Organise with Folders',
+    description: 'Click "All Tasks" to view, organise, and drag tasks between folders. Create folders by class, topic, or any system that works for you.',
     target: '[data-tutorial="folders"]',
     position: 'right',
   },

@@ -91,7 +91,6 @@ export interface Submission {
   selectedNextStepId?: string;    // Track selected next step ID
   selectedNextStep?: NextStep;    // Full next step object for context
   isRevision?: boolean;           // Flag for teacher to know it's a resubmit
-  masteryConfirmed?: boolean;     // Teacher confirmed mastery
   feedbackStatus?: 'pending' | 'generated' | 'approved' | 'released'; // Backend feedback status
   validationWarnings?: string[];  // Backend validation warnings
   detectionResult?: 'aligned' | 'uncertain'; // Revision alignment detection result

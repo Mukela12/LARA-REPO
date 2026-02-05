@@ -60,17 +60,17 @@ export const FeedbackWarnings: React.FC<FeedbackWarningsProps> = ({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600" />
-            <h3 className="font-semibold text-slate-900">Feedback Warnings</h3>
+            <h3 className="font-semibold text-slate-900">Feedback Balance Check</h3>
           </div>
           <div className="flex items-center gap-2">
             {strongWarnings.length > 0 && (
               <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
-                {strongWarnings.length} important
+                {strongWarnings.length} worth reviewing
               </span>
             )}
             {softWarnings.length > 0 && (
               <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
-                {softWarnings.length} suggestion{softWarnings.length !== 1 ? 's' : ''}
+                {softWarnings.length} idea{softWarnings.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
@@ -186,7 +186,7 @@ export const FeedbackWarnings: React.FC<FeedbackWarningsProps> = ({
       {isExpanded && (
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-200">
           <p className="text-xs text-slate-500">
-            These warnings are suggestions only and do not block feedback approval.
+            These are suggestions to help you refine feedback. They do not block approval.
           </p>
         </div>
       )}

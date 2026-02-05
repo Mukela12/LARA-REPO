@@ -1,22 +1,9 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { tutorialSteps, TutorialStep, ONBOARDING_KEY } from './tutorialSteps';
+import { tutorialSteps, ONBOARDING_KEY } from './tutorialSteps';
 import { TutorialOverlay } from './TutorialOverlay';
 import { authApi, getToken } from '../../lib/api';
-
-interface OnboardingContextType {
-  isActive: boolean;
-  currentStep: number;
-  currentStepData: TutorialStep | null;
-  totalSteps: number;
-  startTutorial: () => void;
-  nextStep: () => void;
-  prevStep: () => void;
-  skipTutorial: () => void;
-  completeTutorial: () => void;
-}
-
-export const OnboardingContext = createContext<OnboardingContextType | null>(null);
+import { OnboardingContext, OnboardingContextType } from './OnboardingContext';
 
 interface OnboardingProviderProps {
   children: React.ReactNode;

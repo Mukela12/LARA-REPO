@@ -276,13 +276,13 @@ function checkExcessiveCount(feedback: FeedbackSession): FeedbackWarning[] {
     });
   }
 
-  if (feedback.nextSteps.length > 2) {
+  if (feedback.nextSteps.length > 3) {
     warnings.push({
       id: 'excessive-next-steps',
       type: 'excessive_feedback_count',
       severity: 'soft',
       title: 'Too Many Next Steps',
-      description: `Found ${feedback.nextSteps.length} next steps. Consider limiting to 1-2 actionable steps.`,
+      description: `Found ${feedback.nextSteps.length} next steps. Consider limiting to 2-3 actionable steps.`,
     });
   }
 

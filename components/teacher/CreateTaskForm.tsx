@@ -150,10 +150,11 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Get the final criteria - use ULE if selected, otherwise custom
+    // ULE always forms the baseline; task-specific criteria are additive
+    const customCriteria = criteria.filter(c => c.trim() !== '');
     const finalCriteria = useUniversalExpectations
       ? UNIVERSAL_LEARNING_EXPECTATIONS
-      : criteria.filter(c => c.trim() !== '');
+      : [...UNIVERSAL_LEARNING_EXPECTATIONS, ...customCriteria];
 
     // Simulate network delay
     setTimeout(() => {

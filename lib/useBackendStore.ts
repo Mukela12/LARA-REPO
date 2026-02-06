@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Student, Task, FeedbackSession, Submission, NextStep, Folder, TeacherCredits } from '../types';
 import { tasksApi, foldersApi, sessionsApi, authApi, setStudentToken, getStudentToken, clearStudentToken, TaskResponse, FolderResponse } from './api';
+import { saveTaskCodeMapping } from './taskCodes';
 
 export interface BackendState {
   tasks: Task[];
@@ -86,6 +87,13 @@ export function useBackendStore(teacherId?: string) {
 
       const tasks = tasksResponse.map(taskResponseToTask);
       const folders = foldersResponse.map(folderResponseToFolder);
+
+      // Sync task code mappings to localStorage for student access
+      tasks.forEach(task => {
+        if (task.taskCode) {
+          saveTaskCodeMapping(undefined, task.taskCode, task);
+        }
+      });
 
       setState(prev => ({
         ...prev,
@@ -208,6 +216,12 @@ export function useBackendStore(teacherId?: string) {
       });
 
       const newTask = taskResponseToTask(response);
+
+      // Save task code mapping for student access
+      if (newTask.taskCode) {
+        saveTaskCodeMapping(undefined, newTask.taskCode, newTask);
+      }
+
       setState(prev => ({
         ...prev,
         tasks: [newTask, ...prev.tasks],
@@ -248,12 +262,17 @@ export function useBackendStore(teacherId?: string) {
   const deactivateTask = async (taskId: string) => {
     try {
       await tasksApi.updateStatus(taskId, 'inactive');
-      setState(prev => ({
-        ...prev,
-        tasks: prev.tasks.map(t =>
+      setState(prev => {
+        const updatedTasks = prev.tasks.map(t =>
           t.id === taskId ? { ...t, status: 'inactive' as const, updatedAt: new Date() } : t
-        ),
-      }));
+        );
+        // Update localStorage mapping with new status
+        const updatedTask = updatedTasks.find(t => t.id === taskId);
+        if (updatedTask?.taskCode) {
+          saveTaskCodeMapping(undefined, updatedTask.taskCode, updatedTask);
+        }
+        return { ...prev, tasks: updatedTasks };
+      });
     } catch (error) {
       console.error('Failed to deactivate task:', error);
       throw error;
@@ -263,12 +282,17 @@ export function useBackendStore(teacherId?: string) {
   const reactivateTask = async (taskId: string) => {
     try {
       await tasksApi.updateStatus(taskId, 'active');
-      setState(prev => ({
-        ...prev,
-        tasks: prev.tasks.map(t =>
+      setState(prev => {
+        const updatedTasks = prev.tasks.map(t =>
           t.id === taskId ? { ...t, status: 'active' as const, updatedAt: new Date() } : t
-        ),
-      }));
+        );
+        // Update localStorage mapping with new status
+        const updatedTask = updatedTasks.find(t => t.id === taskId);
+        if (updatedTask?.taskCode) {
+          saveTaskCodeMapping(undefined, updatedTask.taskCode, updatedTask);
+        }
+        return { ...prev, tasks: updatedTasks };
+      });
     } catch (error) {
       console.error('Failed to reactivate task:', error);
       throw error;

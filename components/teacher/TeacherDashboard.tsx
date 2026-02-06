@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { ClassInsight, Student, Task, Submission, Folder, TeacherCredits } from '../../types';
+import { Student, Task, Submission, Folder, TeacherCredits } from '../../types';
 import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil, UserMinus, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -23,7 +23,6 @@ interface SessionInfo {
 }
 
 interface TeacherDashboardProps {
-  insights: ClassInsight[];
   students: Student[];
   tasks: Task[];
   submissions: Record<string, Submission>;
@@ -51,7 +50,6 @@ interface TeacherDashboardProps {
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
-  insights,
   students,
   tasks,
   submissions,
@@ -231,7 +229,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <ClassInsightsView
           students={students}
           submissions={submissions}
-          insights={insights}
+          tasks={tasks}
+          selectedTaskId={selectedTaskId}
+          onSelectTask={onSelectTask}
         />
       </div>
     );

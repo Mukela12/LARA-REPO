@@ -29,6 +29,7 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
   const [copied, setCopied] = useState(false);
   const [revisionJustSubmitted, setRevisionJustSubmitted] = useState(false);
   const [submittedContent, setSubmittedContent] = useState('');
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   const formatLearningNotes = useCallback((): string => {
     const lines: string[] = [];
@@ -119,9 +120,16 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
     try {
       await navigator.clipboard.writeText(notes);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleReturnClick = () => {
+    if (!copied) {
+      setShowExitDialog(true);
+    } else {
+      onCancel();
     }
   };
 
@@ -145,79 +153,14 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [revisionJustSubmitted, copied]);
 
-  // Show success screen after any revision submit (including max revisions)
-  if (revisionJustSubmitted || maxRevisionsReached) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-        <Card className="max-w-md w-full p-8 text-center space-y-6">
-          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="w-10 h-10" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-slate-900">Your revision has been submitted.</h2>
-            <p className="text-slate-600">
-              Your teacher will review how this addresses the next step you chose.
-            </p>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-emerald-700">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">Revision {maxRevisionsReached ? currentRevisionCount : (currentRevisionCount + 1)} Recorded</span>
-            </div>
-            {maxRevisionsReached && (
-              <p className="text-sm text-slate-600 mt-1">
-                You have submitted all 3 revisions on this task.
-              </p>
-            )}
-          </div>
-
-          {/* Instructional microcopy */}
-          <p className="text-sm text-slate-500 italic">
-            Paste this into your learning notes so it makes sense when you return to it later.
-          </p>
-          <Button
-            variant="primary"
-            className="w-full"
-            onClick={handleCopyNotes}
-            leftIcon={copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
-          >
-            {copied ? 'Copied to Clipboard!' : 'Copy to Learning Notes'}
-          </Button>
-
-          {/* Exit message */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <p className="text-sm text-slate-700 font-medium">
-              You can now return to your class learning.
-            </p>
-          </div>
-
-          {/* Exit protection notice if not copied */}
-          {!copied && (
-            <div className="flex items-center gap-2 text-xs text-amber-600">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              <span>Copy your learning notes before leaving this page.</span>
-            </div>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={onCancel}
-          >
-            Return to Feedback
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-
-  // Timer for revision
+  // Timer for revision — must be before early return to satisfy Rules of Hooks
   useEffect(() => {
+    if (revisionJustSubmitted || maxRevisionsReached) return;
     const timer = setInterval(() => {
       setRevisionTimeElapsed(prev => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [revisionJustSubmitted, maxRevisionsReached]);
 
   // Format time for display
   const formatTime = (seconds: number): string => {
@@ -225,6 +168,103 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Show success screen after any revision submit (including max revisions)
+  if (revisionJustSubmitted || maxRevisionsReached) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <Card className="max-w-lg w-full p-10 text-center">
+          {/* Success icon + message */}
+          <div className="mb-8">
+            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5">
+              <CheckCircle className="w-10 h-10" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Your revision has been submitted.</h2>
+            <p className="text-slate-600">
+              Your teacher will review how this addresses the next step you chose.
+            </p>
+          </div>
+
+          {/* Copy to learning notes section */}
+          <div className="mb-8">
+            <p className="text-sm text-slate-500 italic mb-4">
+              Paste this into your learning notes so it makes sense when you return to it later.
+            </p>
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={handleCopyNotes}
+              leftIcon={copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
+            >
+              {copied ? 'Copied to learning notes' : 'Copy to Learning Notes'}
+            </Button>
+          </div>
+
+          {/* Exit section */}
+          <div className="border-t border-slate-200 pt-6 space-y-4">
+            <p className="text-sm text-slate-700 font-medium">
+              You can now return to your class learning.
+            </p>
+
+            {!copied && (
+              <div className="flex items-center justify-center gap-2 text-xs text-amber-600">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>Copy your learning notes before leaving this page.</span>
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleReturnClick}
+            >
+              Return to Feedback
+            </Button>
+          </div>
+        </Card>
+
+        {/* Exit protection dialog */}
+        {showExitDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="max-w-sm w-full p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-50 rounded-full">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">Save your learning first?</h3>
+              </div>
+              <p className="text-sm text-slate-600">
+                You haven't copied the full learning context to your learning notes yet. Copy it before leaving so it makes sense when you come back to it later.
+              </p>
+              <div className="space-y-2 pt-2">
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={async () => {
+                    await handleCopyNotes();
+                    setShowExitDialog(false);
+                  }}
+                  leftIcon={<Copy className="w-4 h-4" />}
+                >
+                  Copy to learning notes now
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setShowExitDialog(false);
+                    onCancel();
+                  }}
+                >
+                  Leave without copying
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const handleSubmitRevision = async () => {
     if (!revisionContent.trim() || !task) return;

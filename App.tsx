@@ -128,8 +128,9 @@ function AppContent() {
 
       // Update status to feedback_ready
       approveFeedback(currentStudentId);
+      notify.success('Feedback Ready', 'Your teacher has sent you feedback!');
     }
-  }, [currentStudentId, studentTaskId, state.currentTaskId, state.submissions, submitWork, approveFeedback]);
+  }, [currentStudentId, studentTaskId, state.currentTaskId, state.submissions, submitWork, approveFeedback, notify]);
 
   // Use WebSocket for real-time feedback when student is waiting
   useStudentSocket(studentSessionId, currentStudentId, handleFeedbackReady);
@@ -562,7 +563,6 @@ function AppContent() {
             <TeacherDashboard
                 activeTab={activeTab}
                 onNavigate={setActiveTab}
-                insights={[]}
                 students={state.students}
                 tasks={state.tasks}
                 submissions={state.submissions}
@@ -664,9 +664,11 @@ function AppContent() {
 
     // Find the task - prioritize: backend task > global task lookup > studentTaskId > currentTaskId > first task
     let currentTask: typeof state.tasks[0] | undefined;
+    let taskResolvedFromCode = false; // Track whether we found the actual task (not a fallback)
 
     // FIRST: Use task from backend join response if available
     if (studentTask) {
+      taskResolvedFromCode = true;
       currentTask = {
         id: studentTask.id,
         title: studentTask.title,
@@ -686,22 +688,29 @@ function AppContent() {
     if (!currentTask && urlTaskCode) {
       const taskFromGlobal = getTaskFromCode(urlTaskCode);
       if (taskFromGlobal) {
+        taskResolvedFromCode = true;
         currentTask = taskFromGlobal;
       }
     }
 
     // THIRD: Try to use the studentTaskId (set when student joined or from submission)
     if (!currentTask && studentTaskId) {
-      currentTask = state.tasks.find(t => t.id === studentTaskId);
+      const foundTask = state.tasks.find(t => t.id === studentTaskId);
+      if (foundTask) {
+        taskResolvedFromCode = true;
+        currentTask = foundTask;
+      }
     }
 
     // FOURTH: Fallback to first task if nothing else works (demo mode)
     if (!currentTask) {
       currentTask = state.tasks[0];
+      // Note: taskResolvedFromCode stays false — we're guessing
     }
 
-    // Validate task status - show error if inactive
-    if (currentTask && currentTask.status === 'inactive') {
+    // Validate task status - only show inactive error when we actually resolved the correct task
+    // Don't block access based on a fallback guess (state.tasks[0]) which may be the wrong task
+    if (taskResolvedFromCode && currentTask && currentTask.status === 'inactive') {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
           <Card className="max-w-md w-full p-8 text-center space-y-4">
@@ -782,7 +791,6 @@ function AppContent() {
         // Update local state
         submitRevision(currentStudentId, revisionTask.id, content, timeElapsed);
         setSelectedNextStep(null);
-        setCurrentView('student_flow');
       }
     };
 

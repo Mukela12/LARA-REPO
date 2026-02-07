@@ -22,9 +22,9 @@ function getEnvVar(key: string, required: boolean = false): string | undefined {
  * Gets the Anthropic API key (required)
  */
 export function getAnthropicApiKey(): string {
-  const apiKey = getEnvVar('VITE_ANTHROPIC_API_KEY', true);
+  const apiKey = getEnvVar('ANTHROPIC_API_KEY', true);
   if (!apiKey) {
-    throw new Error('VITE_ANTHROPIC_API_KEY is required but not set');
+    throw new Error('ANTHROPIC_API_KEY is required but not set');
   }
   return apiKey;
 }
@@ -53,7 +53,7 @@ export function validateEnvironment(): { valid: boolean; errors: string[] } {
   try {
     getAnthropicApiKey();
   } catch (e) {
-    errors.push('Missing VITE_ANTHROPIC_API_KEY');
+    errors.push('Missing ANTHROPIC_API_KEY');
   }
 
   return {
@@ -67,7 +67,7 @@ export function validateEnvironment(): { valid: boolean; errors: string[] } {
  */
 export function getEnvironmentInfo() {
   return {
-    hasApiKey: !!import.meta.env.VITE_ANTHROPIC_API_KEY,
+    hasApiKey: !!import.meta.env.ANTHROPIC_API_KEY,
     model: getClaudeModel(),
     baseUrl: getBaseUrl(),
     isDev: import.meta.env.DEV,

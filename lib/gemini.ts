@@ -4,11 +4,11 @@ import { FeedbackSession } from "../types";
 // Helper function to get or create Anthropic client
 // This ensures the API key is read at runtime, not build time
 function getAnthropicClient(): Anthropic {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  const apiKey = import.meta.env.ANTHROPIC_API_KEY;
 
   if (!apiKey || apiKey.trim() === '') {
     throw new Error(
-      'Missing Anthropic API key. Please set VITE_ANTHROPIC_API_KEY in your environment variables. ' +
+      'Missing Anthropic API key. Please set ANTHROPIC_API_KEY in your environment variables. ' +
       'For Netlify: Add it in Site settings → Build & deploy → Environment variables'
     );
   }

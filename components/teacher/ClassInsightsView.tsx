@@ -1,9 +1,43 @@
 import React, { useMemo } from 'react';
 import { Card } from '../ui/Card';
-import { Users, Clock, TrendingUp, Award, BarChart3, AlertTriangle, Lightbulb } from 'lucide-react';
+import { Users, Clock, TrendingUp, Award, BarChart3, BookOpen } from 'lucide-react';
 import { Student, Submission, Task } from '../../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TaskSelector } from './TaskSelector';
+
+// Fixed reteach tag set
+const RETEACH_TAGS = {
+  ATQ: { label: 'Answer the question directly', color: 'bg-red-100 text-red-800 border-red-200' },
+  EVIDENCE: { label: 'Add evidence (use the source)', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  REASONING: { label: 'Explain why (link ideas)', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  TERMS: { label: 'Use key terms accurately', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+  CLARITY: { label: 'Make it clearer (fix structure)', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+} as const;
+
+type ReteachTag = keyof typeof RETEACH_TAGS;
+
+// Keyword-matching fallback for classifying growth areas without primaryTag
+function classifyGrowthArea(text: string): ReteachTag {
+  const lower = text.toLowerCase();
+
+  const atqKeywords = ['off-task', 'off task', 'main point', 'question', 'does not answer', 'didn\'t answer', 'not answering', 'address the question', 'respond to the question'];
+  const evidenceKeywords = ['evidence', 'source', 'support', 'example', 'quote', 'reference', 'data', 'cite'];
+  const reasoningKeywords = ['explain', 'reasoning', 'cause', 'relationship', 'because', 'why', 'link', 'connect', 'justify'];
+  const termsKeywords = ['vocabulary', 'terminology', 'key term', 'technical', 'subject-specific', 'definition', 'define'];
+  const clarityKeywords = ['clearer', 'structure', 'organis', 'organiz', 'paragraph', 'flow', 'coherent', 'confusing', 'unclear'];
+
+  const scores: Record<ReteachTag, number> = { ATQ: 0, EVIDENCE: 0, REASONING: 0, TERMS: 0, CLARITY: 0 };
+
+  atqKeywords.forEach(k => { if (lower.includes(k)) scores.ATQ++; });
+  evidenceKeywords.forEach(k => { if (lower.includes(k)) scores.EVIDENCE++; });
+  reasoningKeywords.forEach(k => { if (lower.includes(k)) scores.REASONING++; });
+  termsKeywords.forEach(k => { if (lower.includes(k)) scores.TERMS++; });
+  clarityKeywords.forEach(k => { if (lower.includes(k)) scores.CLARITY++; });
+
+  const maxScore = Math.max(...Object.values(scores));
+  if (maxScore === 0) return 'CLARITY'; // Default fallback
+
+  return (Object.entries(scores) as [ReteachTag, number][]).find(([, v]) => v === maxScore)![0];
+}
 
 interface ClassInsightsViewProps {
   students: Student[];
@@ -41,86 +75,43 @@ export const ClassInsightsView: React.FC<ClassInsightsViewProps> = ({
     );
   }, [submissions, currentTask]);
 
-  // Aggregate common feedback patterns from real AI feedback
-  const { feedbackTypes, learningGaps } = useMemo(() => {
-    const strengthCounts: Record<string, number> = {};
-    const growthCounts: Record<string, number> = {};
+  // Aggregate reteach tags from growth areas
+  const reteachData = useMemo(() => {
+    const tagCounts: Record<ReteachTag, number> = { ATQ: 0, EVIDENCE: 0, REASONING: 0, TERMS: 0, CLARITY: 0 };
 
     taskSubmissions.forEach(sub => {
       if (!sub.feedback) return;
 
-      // Count strength themes (use first ~40 chars as key to group similar)
-      sub.feedback.strengths.forEach(s => {
-        strengthCounts[s.text] = (strengthCounts[s.text] || 0) + 1;
-      });
-
-      // Count growth area themes
-      sub.feedback.growthAreas.forEach(g => {
-        growthCounts[g.text] = (growthCounts[g.text] || 0) + 1;
+      sub.feedback.growthAreas.forEach((g: any) => {
+        // Use primaryTag from AI if available, otherwise classify via keywords
+        const tag: ReteachTag = (g.primaryTag && g.primaryTag in RETEACH_TAGS)
+          ? g.primaryTag as ReteachTag
+          : classifyGrowthArea(g.text);
+        tagCounts[tag]++;
       });
     });
 
-    // Sort by frequency and take top 5
-    const truncate = (text: string, max: number) =>
-      text.length > max ? text.substring(0, max).trim() + '...' : text;
-
-    const feedbackTypes = Object.entries(strengthCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([fullText, value]) => ({ name: truncate(fullText, 30), fullText, value }));
-
-    const learningGaps = Object.entries(growthCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([fullText, value]) => ({ name: truncate(fullText, 30), fullText, value }));
-
-    return { feedbackTypes, learningGaps };
-  }, [taskSubmissions]);
-
-  // Aggregate next step patterns
-  const nextStepPatterns = useMemo(() => {
-    const stepCounts: Record<string, number> = {};
-    taskSubmissions.forEach(sub => {
-      if (!sub.feedback) return;
-      sub.feedback.nextSteps.forEach(step => {
-        const key = `${step.actionVerb} ${step.target}`;
-        stepCounts[key] = (stepCounts[key] || 0) + 1;
-      });
-    });
-    return Object.entries(stepCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, value]) => ({ name, value }));
+    // Sort by count descending, filter out zeros
+    return (Object.entries(tagCounts) as [ReteachTag, number][])
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1]);
   }, [taskSubmissions]);
 
   // Statistics
   const totalStudents = taskStudents.length;
-  const activeStudents = taskStudents.filter(s => s.status !== 'completed').length;
   const completedStudents = taskStudents.filter(s => s.status === 'completed').length;
   const feedbackCount = taskSubmissions.length;
 
-  // Average time on task (from real timeElapsed data)
+  // Average time on task
   const avgTime = useMemo(() => {
     const times = taskSubmissions
       .map(s => s.timeElapsed)
       .filter((t): t is number => t !== undefined && t > 0);
     if (times.length === 0) return 0;
-    return Math.round(times.reduce((a, b) => a + b, 0) / times.length / 60); // in minutes
+    return Math.round(times.reduce((a, b) => a + b, 0) / times.length / 60);
   }, [taskSubmissions]);
 
   const hasData = taskSubmissions.length > 0;
-
-  // Custom tooltip that shows the full text on hover
-  const InsightTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { fullText?: string; name: string; value: number } }> }) => {
-    if (!active || !payload || !payload.length) return null;
-    const data = payload[0].payload;
-    return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-xs">
-        <p className="text-sm text-slate-700 mb-1">{data.fullText || data.name}</p>
-        <p className="text-xs font-semibold text-slate-500">{data.value} {data.value === 1 ? 'learner' : 'learners'}</p>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -205,105 +196,49 @@ export const ClassInsightsView: React.FC<ClassInsightsViewProps> = ({
         </Card>
       ) : (
         <>
-          {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Common Learning Gaps (from real growth areas) */}
-            <Card className="!overflow-visible">
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <h3 className="text-lg font-semibold text-slate-900">Common Learning Gaps</h3>
-                </div>
-                <p className="text-sm text-slate-600">
-                  Growth areas identified by LARA across learners on this task. Use these patterns to inform your teaching.
-                </p>
+          {/* Top Reteach Moves */}
+          <Card>
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-1">
+                <BookOpen className="w-5 h-5 text-brand-600" />
+                <h3 className="text-lg font-semibold text-slate-900">Top reteach moves</h3>
               </div>
-              {learningGaps.length > 0 ? (
-                <ResponsiveContainer width="100%" height={Math.max(200, learningGaps.length * 50)}>
-                  <BarChart
-                    data={learningGaps}
-                    layout="vertical"
-                    margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" stroke="#64748b" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      stroke="#64748b"
-                      tick={{ fontSize: 11 }}
-                      width={200}
-                    />
-                    <Tooltip content={<InsightTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 50 }} />
-                    <Bar dataKey="value" fill="#f59e0b" name="Learners" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-sm text-slate-400 py-8 text-center">No growth areas identified yet</p>
-              )}
-            </Card>
+              <p className="text-sm text-slate-600">
+                Common growth areas across learners, grouped by type. Use these to plan targeted instruction.
+              </p>
+            </div>
 
-            {/* Common Feedback Types (from real strengths) */}
-            <Card className="!overflow-visible">
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Lightbulb className="w-5 h-5 text-emerald-500" />
-                  <h3 className="text-lg font-semibold text-slate-900">Common Strengths</h3>
-                </div>
-                <p className="text-sm text-slate-600">
-                  Strengths identified by LARA across learners. These show what your class is doing well.
-                </p>
+            {reteachData.length > 0 ? (
+              <div className="space-y-3">
+                {reteachData.map(([tag, count]) => {
+                  const config = RETEACH_TAGS[tag];
+                  const percentage = Math.round((count / feedbackCount) * 100);
+                  return (
+                    <div key={tag} className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${config.color}`}>
+                            {config.label}
+                          </span>
+                          <span className="text-sm font-semibold text-slate-700">
+                            {count} of {feedbackCount} learner{feedbackCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-brand-500 rounded-full transition-all"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              {feedbackTypes.length > 0 ? (
-                <ResponsiveContainer width="100%" height={Math.max(200, feedbackTypes.length * 50)}>
-                  <BarChart
-                    data={feedbackTypes}
-                    layout="vertical"
-                    margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" stroke="#64748b" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      stroke="#64748b"
-                      tick={{ fontSize: 11 }}
-                      width={200}
-                    />
-                    <Tooltip content={<InsightTooltip />} allowEscapeViewBox={{ x: true, y: true }} wrapperStyle={{ zIndex: 50 }} />
-                    <Bar dataKey="value" fill="#10b981" name="Learners" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-sm text-slate-400 py-8 text-center">No strengths identified yet</p>
-              )}
-            </Card>
-          </div>
-
-          {/* Common Next Steps */}
-          {nextStepPatterns.length > 0 && (
-            <Card>
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                  <h3 className="text-lg font-semibold text-slate-900">Common Next Steps Suggested</h3>
-                </div>
-                <p className="text-sm text-slate-600">
-                  The most frequent next steps LARA has suggested for this task. This can help you prioritise whole-class instruction.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {nextStepPatterns.map((pattern, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <span className="text-sm text-slate-700 flex-1">{pattern.name}</span>
-                    <span className="text-sm font-semibold text-blue-600 ml-4">
-                      {pattern.value} {pattern.value === 1 ? 'learner' : 'learners'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+            ) : (
+              <p className="text-sm text-slate-400 py-4 text-center">No growth areas identified yet</p>
+            )}
+          </Card>
         </>
       )}
 

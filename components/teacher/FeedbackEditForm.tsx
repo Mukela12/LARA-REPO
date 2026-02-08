@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Plus, X, Save } from 'lucide-react';
@@ -19,6 +19,14 @@ export const FeedbackEditForm: React.FC<FeedbackEditFormProps> = ({
   const [strengths, setStrengths] = useState<FeedbackItem[]>(initialFeedback.strengths);
   const [growthAreas, setGrowthAreas] = useState<FeedbackItem[]>(initialFeedback.growthAreas);
   const [nextSteps, setNextSteps] = useState<NextStep[]>(initialFeedback.nextSteps);
+
+  // Auto-resize textareas
+  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, []);
 
   const handleSave = () => {
     onSave({
@@ -119,10 +127,14 @@ export const FeedbackEditForm: React.FC<FeedbackEditFormProps> = ({
             {strengths.map((strength, idx) => (
               <div key={strength.id} className="flex gap-2">
                 <textarea
+                  ref={(el) => { if (el) autoResize(el); }}
                   value={strength.text}
-                  onChange={(e) => updateStrength(idx, e.target.value)}
-                  className="flex-1 px-3 py-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-emerald-50"
-                  rows={2}
+                  onChange={(e) => {
+                    updateStrength(idx, e.target.value);
+                    autoResize(e.target);
+                  }}
+                  className="flex-1 px-3 py-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-emerald-50 resize-none overflow-hidden"
+                  rows={1}
                   placeholder="What did the student do well?"
                 />
                 <button
@@ -148,10 +160,14 @@ export const FeedbackEditForm: React.FC<FeedbackEditFormProps> = ({
             {growthAreas.map((area, idx) => (
               <div key={area.id} className="flex gap-2">
                 <textarea
+                  ref={(el) => { if (el) autoResize(el); }}
                   value={area.text}
-                  onChange={(e) => updateGrowthArea(idx, e.target.value)}
-                  className="flex-1 px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-amber-50"
-                  rows={2}
+                  onChange={(e) => {
+                    updateGrowthArea(idx, e.target.value);
+                    autoResize(e.target);
+                  }}
+                  className="flex-1 px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-amber-50 resize-none overflow-hidden"
+                  rows={1}
                   placeholder="What needs improvement?"
                 />
                 <button

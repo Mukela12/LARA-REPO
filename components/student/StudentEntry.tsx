@@ -193,9 +193,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             </Button>
           </form>
 
-          <p className="text-xs text-slate-400 text-center">
-            Enter the code your teacher gave you (for example: 9A01)
-          </p>
         </Card>
       </div>
     );
@@ -306,7 +303,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             <div className="p-1.5 bg-brand-50 rounded text-brand-700 flex-shrink-0">
               <BookOpen className="w-4 h-4" />
             </div>
-            <span className="font-semibold text-slate-900 text-sm truncate">{task?.title || 'Learning Task'}</span>
+            <span className="font-semibold text-slate-900 text-sm">{task?.title || 'Learning Task'}</span>
           </div>
 
           {/* Timer Display */}
@@ -346,6 +343,12 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({
             </div>
           </div>
         )}
+
+        {/* Full Question Display */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">Question</h3>
+          <p className="text-lg font-semibold text-slate-900 leading-relaxed">{task?.title || 'Loading...'}</p>
+        </div>
 
         <div className="bg-brand-50 border border-brand-100 rounded-xl p-5">
           <h3 className="text-sm font-bold text-brand-800 uppercase tracking-wide mb-2">Prompt</h3>

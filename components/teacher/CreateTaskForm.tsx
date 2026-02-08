@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Plus, Trash2, Save, Edit3, Upload, X, Image as ImageIcon, FileText, HelpCircle, Loader2 } from 'lucide-react';
@@ -43,6 +43,20 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
   const [showUleTooltip, setShowUleTooltip] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea for title
+  const autoResizeTitle = useCallback(() => {
+    const el = titleRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, []);
+
+  useEffect(() => {
+    autoResizeTitle();
+  }, [title, autoResizeTitle]);
 
   // Reset form when editTask changes
   useEffect(() => {
@@ -214,21 +228,23 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Task Title</label>
-            <input 
+            <label className="block text-sm font-bold text-slate-800 mb-1">Question</label>
+            <textarea
+              ref={titleRef}
               required
-              type="text" 
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
-              placeholder="e.g., Persuasive Essay: Climate Change"
+              rows={1}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all resize-none overflow-hidden"
+              placeholder="Using Source A, explain the biogeographical process shown."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+            <p className="text-xs text-slate-500 mt-1 italic">LARA uses this question to guide feedback on clarity, evidence, reasoning, and subject knowledge.</p>
+            <br></br>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Writing Prompt</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Writing Prompt (Optional)</label>
             <textarea
-              required
               rows={4}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all"
               placeholder="What should the learners write about?"
@@ -240,7 +256,7 @@ export const CreateTaskForm: React.FC<CreateTaskFormProps> = ({ onSave, onCancel
           {/* File Upload Section (Images and PDFs) */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Task Attachment (Optional)</label>
-            <p className="text-xs text-slate-500 mb-3">Add an image or PDF to display alongside the prompt for students</p>
+            <p className="text-xs text-slate-500 mb-3">Add a source or stimulus for students to reference</p>
 
             {imageUrl ? (
               <div className="relative inline-block">

@@ -179,37 +179,34 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
             <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5">
               <CheckCircle className="w-10 h-10" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Your revision has been submitted.</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">You've completed your revision!</h2>
             <p className="text-slate-600">
-              Your teacher will review how this addresses the next step you chose.
+              Save your work to your notes before you leave.
             </p>
           </div>
 
-          {/* Copy to learning notes section */}
+          {/* Copy to clipboard section */}
           <div className="mb-8">
-            <p className="text-sm text-slate-500 italic mb-4">
-              Paste this into your learning notes so it makes sense when you return to it later.
-            </p>
             <Button
               variant="primary"
-              className="w-full"
+              className="w-full h-14 text-base"
               onClick={handleCopyNotes}
               leftIcon={copied ? <Check className="w-5 h-5 text-emerald-300" /> : <Copy className="w-5 h-5" />}
             >
-              {copied ? 'Copied to learning notes' : 'Copy to Learning Notes'}
+              {copied ? 'Copied!' : 'Copy to clipboard'}
             </Button>
           </div>
 
           {/* Exit section */}
           <div className="border-t border-slate-200 pt-6 space-y-4">
-            <p className="text-sm text-slate-700 font-medium">
-              You can now return to your class learning.
+            <p className="text-sm text-slate-600">
+              Thanks for using LARA. Your teacher will review your work.
             </p>
 
             {!copied && (
               <div className="flex items-center justify-center gap-2 text-xs text-amber-600">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>Copy your learning notes before leaving this page.</span>
+                <span>Save your work before leaving this page.</span>
               </div>
             )}
 
@@ -231,10 +228,10 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
                 <div className="p-2 bg-amber-50 rounded-full">
                   <AlertTriangle className="w-5 h-5 text-amber-600" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Save your learning first?</h3>
+                <h3 className="text-lg font-bold text-slate-900">Save your work first?</h3>
               </div>
               <p className="text-sm text-slate-600">
-                You haven't copied the full learning context to your learning notes yet. Copy it before leaving so it makes sense when you come back to it later.
+                You haven't copied your work to your notes yet. Copy it before leaving so you don't lose it.
               </p>
               <div className="space-y-2 pt-2">
                 <Button
@@ -246,7 +243,7 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
                   }}
                   leftIcon={<Copy className="w-4 h-4" />}
                 >
-                  Copy to learning notes now
+                  Copy to clipboard now
                 </Button>
                 <Button
                   variant="outline"
@@ -324,13 +321,16 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
           </div>
         )}
 
-        {/* Task Prompt Reminder */}
+        {/* Original Question */}
         <div className="bg-slate-100 border border-slate-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <BookOpen className="w-4 h-4 text-slate-500" />
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Original Prompt</h3>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Original Question</h3>
           </div>
-          <p className="text-slate-700 text-sm">{task?.prompt}</p>
+          <p className="text-slate-900 font-medium mb-2">{task?.title}</p>
+          {task?.prompt && (
+            <p className="text-slate-700 text-sm">{task.prompt}</p>
+          )}
         </div>
 
         {/* Revision Editor */}
@@ -360,7 +360,7 @@ export const StudentRevisionView: React.FC<StudentRevisionViewProps> = ({
                 ) : revisionContent === originalContent ? (
                   <>
                     <Clock className="w-4 h-4 text-amber-500" />
-                    <span className="text-amber-600">Make some changes to submit</span>
+                    <span className="text-amber-600">Make some changes to improve your response</span>
                   </>
                 ) : (
                   <>

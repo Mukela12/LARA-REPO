@@ -122,7 +122,7 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Collapsible Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 border-t-4 border-t-navy-800">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top Bar - Always Visible */}
           <div className="flex items-center justify-between h-14">
@@ -312,7 +312,7 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                     {isRevision ? 'Revised Submission' : 'Student Submission'}
                   </h2>
                   <Badge variant={isRevision ? 'purple' : 'blue'}>
-                    {isRevision ? 'Revised Work' : 'Original Work'}
+                    {isRevision ? 'Revised Work' : 'Original Writing'}
                   </Badge>
                 </div>
 
@@ -412,7 +412,7 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                   <div className="space-y-3">
                     {submission.feedback.growthAreas.map((area, idx) => (
                       <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        <p className="text-sm text-amber-900">{area.text}</p>
+                        <p className="text-sm text-amber-900 whitespace-pre-wrap">{area.text}</p>
                         {area.anchors && area.anchors.length > 0 && (
                           <div className="mt-2 text-xs text-amber-700 italic">
                             "{area.anchors[0]}"
@@ -423,43 +423,33 @@ export const TeacherReviewView: React.FC<TeacherReviewViewProps> = ({
                   </div>
                 </div>
 
-                {/* Next Steps */}
+                {/* Next Steps paired with Reflection Prompts */}
                 <div>
-                  <h3 className="text-sm font-medium text-slate-700 mb-3">Suggested Next Steps</h3>
-                  <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-slate-700 mb-3">Next Steps & Reflection</h3>
+                  <div className="space-y-3">
                     {submission.feedback.nextSteps.map((step, idx) => (
-                      <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-slate-900">
-                          {step.actionVerb} {step.target}
-                        </p>
-                        <p className="text-xs text-slate-600 mt-1">
-                          {step.successIndicator}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Student Reflection Prompts */}
-                {submission.feedback.nextSteps.some(step => step.reflectionPrompt) && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-700 mb-3">Student Reflection Prompts</h3>
-                    <div className="space-y-2">
-                      {submission.feedback.nextSteps
-                        .filter(step => step.reflectionPrompt)
-                        .map((step, idx) => (
-                          <div key={idx} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                            <p className="text-xs font-medium text-purple-700 mb-1">
-                              {step.actionVerb} {step.target}
-                            </p>
+                      <div key={idx} className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Next step</p>
+                          <p className="text-sm font-medium text-slate-900">
+                            {step.actionVerb} {step.target}
+                          </p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            {step.successIndicator}
+                          </p>
+                        </div>
+                        {step.reflectionPrompt && (
+                          <div className="border-t border-slate-200 pt-3">
+                            <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-1">Reflection prompt</p>
                             <p className="text-sm text-purple-900 italic">
                               "{step.reflectionPrompt}"
                             </p>
                           </div>
-                        ))}
-                    </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             </Card>
           </div>

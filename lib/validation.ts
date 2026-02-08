@@ -172,12 +172,21 @@ function checkMissingFeedbackTypes(feedback: FeedbackSession): FeedbackWarning[]
   if (!types.has('self_reg')) missingTypes.push('self-regulation');
 
   if (missingTypes.length > 0) {
+    const presentTypes = ['task', 'process', 'self_reg'].filter(t => types.has(t as any));
+    const presentLabels: Record<string, string> = { task: 'Task (what the student wrote)', process: 'Process (how the student explained it)', self_reg: 'Self-management' };
+    const presentNames = presentTypes.map(t => presentLabels[t] || t);
+
+    let coachingLine = '';
+    if (presentNames.length > 0) {
+      coachingLine = ` Your feedback already covers ${presentNames.join(' and ')}. You could add one short prompt that helps the student plan their next attempt or check their work.`;
+    }
+
     warnings.push({
       id: 'missing-feedback-types',
       type: 'missing_feedback_types',
       severity: 'soft',
       title: 'Incomplete Feedback Balance',
-      description: `Feedback is missing ${missingTypes.join(', ')} type(s). Balanced feedback addresses task performance, learning processes, and self-regulation.`,
+      description: `Research-informed balanced feedback suggests considering all three areas: Task (what the student wrote and how well it answers the question), Process (how the student explained, structured, or reasoned), Self-management (how the student can monitor, improve, or apply it next time).${coachingLine}`,
     });
   }
 

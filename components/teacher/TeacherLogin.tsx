@@ -12,7 +12,8 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [preferredName, setPreferredName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -21,13 +22,13 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
   const [showForgotPasswordMessage, setShowForgotPasswordMessage] = useState(false);
 
   const emailRef = useRef<HTMLInputElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
+  const preferredNameRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus first field on mount and mode change
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isSignUp && nameRef.current) {
-        nameRef.current.focus();
+      if (isSignUp && preferredNameRef.current) {
+        preferredNameRef.current.focus();
       } else if (emailRef.current) {
         emailRef.current.focus();
       }
@@ -95,8 +96,9 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
     setIsLoading(true);
 
     try {
+      const fullName = isSignUp ? `${preferredName.trim()} ${lastName.trim()}`.trim() : '';
       const result = isSignUp
-        ? await signUp(email, password, name)
+        ? await signUp(email, password, fullName)
         : await logIn(email, password);
 
       if (result.success) {
@@ -117,7 +119,8 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
     setEmailError('');
     setEmail('');
     setPassword('');
-    setName('');
+    setPreferredName('');
+    setLastName('');
     setTouched({ email: false });
     setShowForgotPasswordMessage(false);
   };
@@ -234,24 +237,41 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess, onBa
                 className="space-y-5"
                 aria-label={isSignUp ? 'Sign up form' : 'Login form'}
               >
-                {/* Name Field (Sign Up only) */}
+                {/* Name Fields (Sign Up only) */}
                 {isSignUp && (
-                  <motion.div variants={itemVariants}>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Full Name
-                    </label>
-                    <input
-                      ref={nameRef}
-                      type="text"
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all"
-                      placeholder="e.g., Dr. Sarah Mitchell"
-                      required
-                      aria-required="true"
-                    />
-                  </motion.div>
+                  <>
+                    <motion.div variants={itemVariants}>
+                      <label htmlFor="preferredName" className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Preferred Name
+                      </label>
+                      <input
+                        ref={preferredNameRef}
+                        type="text"
+                        id="preferredName"
+                        value={preferredName}
+                        onChange={(e) => setPreferredName(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all"
+                        placeholder="e.g., Sarah"
+                        required
+                        aria-required="true"
+                      />
+                    </motion.div>
+                    <motion.div variants={itemVariants}>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        id="lastName"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 outline-none transition-all"
+                        placeholder="e.g., Mitchell"
+                        required
+                        aria-required="true"
+                      />
+                    </motion.div>
+                  </>
                 )}
 
                 {/* Email Field */}

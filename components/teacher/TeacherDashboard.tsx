@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Student, Task, Submission, Folder, TeacherCredits } from '../../types';
-import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil, UserMinus, X } from 'lucide-react';
+import { Users, Clock, ArrowUpRight, Plus, ClipboardCheck, List, Power, PowerOff, Zap, Loader2, Pencil, UserMinus, X, Eye } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CreateTaskForm } from './CreateTaskForm';
@@ -81,6 +81,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [studentToRemove, setStudentToRemove] = useState<Student | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [viewingStudentId, setViewingStudentId] = useState<string | null>(null);
   const currentTask = tasks.find(t => t.id === selectedTaskId) || tasks[0];
   const notify = useNotification();
 
@@ -380,7 +381,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 All Tasks
               </Button>
               <Button
-                variant="outline"
+                variant="primary"
                 size="sm"
                 onClick={() => {
                   setEditingTask(null);
@@ -388,6 +389,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 }}
                 leftIcon={<Plus className="w-4 h-4" />}
                 data-tutorial="create-task"
+                className="shadow-md shadow-brand-500/20 font-bold"
               >
                 New Task
               </Button>
@@ -527,25 +529,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             <td className="px-6 py-4"><StatusBadge status={student.status} /></td>
                             <td className="px-6 py-4 text-right">
                                 {student.status === 'ready_for_feedback' && (
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => handleGenerateFeedback(student.id)}
-                                    disabled={generatingStudentId === student.id}
-                                    className="bg-purple-600 hover:bg-purple-700"
-                                  >
-                                    {generatingStudentId === student.id ? (
-                                      <>
-                                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                        Generating...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Zap className="w-4 h-4 mr-1" />
-                                        Generate Feedback
-                                      </>
-                                    )}
-                                  </Button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => setViewingStudentId(student.id)}
+                                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                                      title="View Response"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </button>
+                                    <Button
+                                      size="sm"
+                                      variant="primary"
+                                      onClick={() => handleGenerateFeedback(student.id)}
+                                      disabled={generatingStudentId === student.id}
+                                      className="bg-purple-600 hover:bg-purple-700"
+                                    >
+                                      {generatingStudentId === student.id ? (
+                                        <>
+                                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                          Generating...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Zap className="w-4 h-4 mr-1" />
+                                          Generate Feedback
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
                                 )}
                                 {student.status === 'generating' && (
                                   <span className="text-blue-600 text-xs font-medium flex items-center gap-1">
@@ -583,6 +594,64 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             </table>
           </div>
       </Card>
+
+      {/* Student Response Side Panel - rendered via portal to escape stacking context */}
+      {viewingStudentId && (() => {
+        const viewingStudent = taskStudents.find(s => s.id === viewingStudentId);
+        const viewingSubmission = submissions[viewingStudentId];
+        return createPortal(
+          <>
+            <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={() => setViewingStudentId(null)} />
+            <div className="fixed top-0 right-0 bottom-0 w-full max-w-lg bg-white shadow-2xl border-l border-slate-200 flex flex-col z-[9999]">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{viewingStudent?.name || 'Student'}</h3>
+                  <p className="text-xs text-slate-500">Student Response</p>
+                </div>
+                <button
+                  onClick={() => setViewingStudentId(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                {viewingSubmission?.content ? (
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed text-sm">
+                        {viewingSubmission.content}
+                      </p>
+                    </div>
+                    {viewingSubmission.timestamp && (
+                      <p className="text-xs text-slate-500">
+                        Submitted: {new Date(viewingSubmission.timestamp).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 text-sm">No submission content available.</p>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    handleGenerateFeedback(viewingStudentId);
+                    setViewingStudentId(null);
+                  }}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  leftIcon={<Zap className="w-4 h-4" />}
+                >
+                  Generate Feedback
+                </Button>
+              </div>
+            </div>
+          </>,
+          document.body
+        );
+      })()}
 
       {/* Remove Learner Confirmation Modal */}
       {studentToRemove && (

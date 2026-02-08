@@ -9,6 +9,7 @@ export async function generateFeedback(
 ): Promise<FeedbackSession> {
   const systemPrompt = `You are LARA, a formative feedback assistant.
 IMPORTANT: Always use Australian/UK English spelling in all generated text (e.g., colour, behaviour, organisation, customise, analyse, recognise, learnt).
+CRITICAL: Never use em dashes (\u2014) or en dashes (\u2013) in any generated text. Use commas, full stops, or semicolons instead.
 
 CRITICAL: You MUST respond with ONLY valid JSON. No introductory text, no explanations, no markdown - ONLY the JSON object. Start your response with { and end with }.
 
@@ -88,7 +89,8 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
       "type": "task" | "process" | "self_reg",
       "text": "Specific area for improvement with direction",
       "anchors": ["REQUIRED: quote showing where to improve"],
-      "criterionRef": 0
+      "criterionRef": 0,
+      "primaryTag": "ATQ" | "EVIDENCE" | "REASONING" | "TERMS" | "CLARITY"
     }
   ],
   "nextSteps": [
@@ -217,6 +219,31 @@ IMPORTANT: Respond with ONLY the JSON object below. No text before or after. Sta
   if (typeof data.masteryAchieved !== 'boolean') {
     data.masteryAchieved = data.growthAreas.length === 0;
   }
+
+  // Post-process: remove em dashes and en dashes from all text fields
+  const stripDashes = (text: string): string =>
+    text.replace(/\u2014/g, ', ').replace(/\u2013/g, ', ');
+
+  if (data.goal) data.goal = stripDashes(data.goal);
+  data.strengths.forEach((s: any) => {
+    if (s.text) s.text = stripDashes(s.text);
+  });
+  data.growthAreas.forEach((g: any) => {
+    if (g.text) g.text = stripDashes(g.text);
+  });
+  data.nextSteps.forEach((n: any) => {
+    if (n.target) n.target = stripDashes(n.target);
+    if (n.successIndicator) n.successIndicator = stripDashes(n.successIndicator);
+    if (n.reflectionPrompt) n.reflectionPrompt = stripDashes(n.reflectionPrompt);
+  });
+
+  // Validate and normalize primaryTag on growth areas
+  const validTags = ['ATQ', 'EVIDENCE', 'REASONING', 'TERMS', 'CLARITY'];
+  data.growthAreas.forEach((g: any) => {
+    if (!g.primaryTag || !validTags.includes(g.primaryTag)) {
+      g.primaryTag = undefined; // Frontend fallback will classify
+    }
+  });
 
   return data as FeedbackSession;
 }

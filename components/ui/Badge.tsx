@@ -13,8 +13,8 @@ export const Badge: React.FC<BadgeProps> = ({ type }) => {
   };
 
   const labels = {
-    task: "Task",
-    process: "Process",
+    task: "What you wrote",
+    process: "How you explained it",
     self_reg: "Self-Reg",
   };
 
